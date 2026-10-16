@@ -1,0 +1,703 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Shop</title>
+<meta name="theme-color" content="#072448">
+
+<!-- =====================================================================
+     SHOP SETTINGS — this is the only part you edit for a new shop.
+     Name, colors, contact info, products and prices all live here.
+     The checkout Worker reads this same block, so prices stay in one place.
+     ===================================================================== -->
+<script type="application/json" id="shop-config">
+{
+  "store": {
+    "name": "Your Shop",
+    "tagline": "Local goods, made for regulars",
+    "initials": "YS",
+    "logo": "",
+    "brandColor": "#072448",
+    "colors": { "brand": "#072448", "accent": "#ff6150", "member": "#4ed4d2", "reward": "#ffcb00", "highlight": "#f8a94b" },
+    "address": "123 Main Street, Your City, ST 00000",
+    "hours": "Mon–Sat 10am–8pm · Sun 12–6pm",
+    "phone": "(555) 555-0100",
+    "email": "hello@yourshop.com"
+  },
+  "api": "https://shop-demo.celyum909.workers.dev",
+  "shipping": { "enabled": true, "flat": 5.99 },
+  "rewards": { "enabled": true, "punchValue": 20, "punches": 10, "reward": "free cap" },
+  "members": {
+    "enabled": true,
+    "percentOff": 10,
+    "perks": ["Member prices on everything", "Members-only weekly drops", "Rewards punches on every order"]
+  },
+  "categories": ["Tees", "Hoodies", "Hats", "Extras"],
+  "products": [
+    {"id": "tee-logo", "name": "Classic Logo Tee", "category": "Tees", "price": 24.99, "sizes": ["S", "M", "L", "XL", "2XL"], "image": "images/tee-logo.jpg", "art": "tee", "color": "#1d1d1d", "desc": "Soft black cotton tee with our embroidered crest on the chest."},
+    {"id": "tee-cream", "name": "Black Pocket Tee", "category": "Tees", "price": 22.99, "sizes": ["S", "M", "L", "XL", "2XL"], "image": "images/tee-cream.jpg", "art": "tee", "color": "#1d1d1d", "desc": "Relaxed fit with a chest pocket and a small stitched mountain."},
+    {"id": "tee-night", "name": "Night Shift Tee", "category": "Tees", "price": 26.99, "sizes": ["S", "M", "L", "XL", "2XL"], "image": "images/tee-night.jpg", "art": "tee", "color": "#2b2f3a", "desc": "Heavyweight black tee with a big neon Night Shift print."},
+    {"id": "hoodie-forest", "name": "Forest Hoodie", "category": "Hoodies", "price": 54.99, "sizes": ["S", "M", "L", "XL", "2XL"], "image": "images/hoodie-forest.jpg", "art": "hoodie", "color": "#2f6f4f", "desc": "Brushed fleece pullover with kangaroo pocket and embroidered logo."},
+    {"id": "hoodie-sand", "name": "Sand Zip Hoodie", "category": "Hoodies", "price": 59.99, "sizes": ["S", "M", "L", "XL", "2XL"], "image": "images/hoodie-sand.jpg", "art": "hoodie", "color": "#c9b48f", "desc": "Soft sherpa fleece full-zip with zip pockets."},
+    {"id": "hoodie-plum", "name": "Plum Hoodie", "category": "Hoodies", "price": 52.99, "sizes": ["S", "M", "L", "XL", "2XL"], "image": "images/hoodie-plum.jpg", "art": "hoodie", "color": "#5b3a63", "desc": "Our customer-favorite color, back again with the Classic crest."},
+    {"id": "cap-logo", "name": "Logo Dad Cap", "category": "Hats", "price": 27.99, "sizes": ["One size"], "image": "images/cap-logo.jpg", "art": "cap", "color": "#cbbd9c", "desc": "Washed khaki cotton cap with embroidered logo and adjustable strap."},
+    {"id": "cap-black", "name": "Black Snapback", "category": "Hats", "price": 29.99, "sizes": ["One size"], "image": "images/cap-black.jpg", "art": "cap", "color": "#23262d", "desc": "Structured black snapback with embroidered monogram."},
+    {"id": "tote", "name": "Canvas Tote", "category": "Extras", "price": 18.99, "sizes": ["One size"], "image": "images/tote.jpg", "art": "tote", "color": "#d9cbb0", "desc": "Sturdy natural canvas tote for everyday carry."},
+    {"id": "mug", "name": "Shop Mug", "category": "Extras", "price": 14.99, "sizes": ["One size"], "image": "images/mug.jpg", "art": "mug", "color": "#f2efe8", "memberPrice": 11.99, "desc": "12 oz ceramic mug. Dishwasher safe."},
+    {"id": "stickers", "name": "Sticker Pack", "category": "Extras", "price": 6.99, "sizes": ["One size"], "image": "images/stickers.jpg", "art": "sticker", "color": "#e8b04b", "desc": "Six weatherproof vinyl stickers."}
+  ],
+  "demo": {
+    "drop": { "id": "hoodie-plum", "price": 39.99, "title": "The Plum Hoodie is back", "note": "Limited run. When it's gone, it's gone.", "ends": "2099-12-31", "membersOnly": false },
+    "sales": { "tee-night": 19.99, "tote": 14.99 }
+  }
+}
+</script>
+
+<script>
+// Light / dark mode: follows the phone until the customer picks one, then remembers it.
+(function () { try { var t = localStorage.getItem('shop-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t } catch (e) {} })();
+</script>
+<style>
+:root{
+  --brand:#2f6f4f;
+  --bg:#f5f6f8; --panel:#ffffff; --panel-2:#eef0f4; --ink:#0e1a2b; --muted:#5f6b7a; --line:#e1e5ec;
+  --shadow:0 6px 24px rgba(10,20,40,.08);
+  /* Shop colors. These are filled in from "colors" in the settings block, with readable text picked automatically. */
+  --on-brand:#fff; --brand-text:var(--brand);
+  --accent:#c2462f; --on-accent:#fff; --accent-text:#c2462f;
+  --member:var(--brand); --on-member:#fff; --member-text:var(--brand);
+  --reward:#e0a92a; --on-reward:#111; --reward-text:#8a6410;
+  --highlight:#fff; --on-highlight:#111;
+  --radius:16px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0b1220; --panel:#121b2c; --panel-2:#19243a; --ink:#eef2f7; --muted:#9aa7b8; --line:#26324a;
+    --shadow:0 6px 24px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0b1220; --panel:#121b2c; --panel-2:#19243a; --ink:#eef2f7; --muted:#9aa7b8; --line:#26324a;
+  --shadow:0 6px 24px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--brand-text);outline-offset:2px}
+.app{max-width:520px;margin:0 auto;min-height:100dvh;padding-bottom:calc(76px + env(safe-area-inset-bottom))}
+
+/* header */
+.top{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:10px;padding:12px 16px;padding-top:calc(12px + env(safe-area-inset-top));background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.logo{width:38px;height:38px;border-radius:11px;background:var(--brand);color:var(--on-brand);display:grid;place-items:center;font-weight:800;font-size:14px;letter-spacing:.5px;flex:none;overflow:hidden}
+.logo img{width:100%;height:100%;object-fit:cover}
+.brand-name{min-width:0;flex:1}
+.brand-name b{display:block;font-size:17px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brand-name small{display:block;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.member-chip{flex:none;border:1px solid var(--brand-text);background:transparent;color:var(--brand-text);border-radius:999px;padding:7px 12px;font-size:12.5px;font-weight:700;white-space:nowrap}
+.member-chip.is-member{background:var(--member);border-color:var(--member);color:var(--on-member)}
+
+.view{display:none;padding:14px 16px 8px}
+.view.active{display:block}
+h2.section{font-size:13px;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);margin:22px 0 10px;font-weight:700}
+
+/* weekly drop */
+.drop{position:relative;display:grid;grid-template-columns:1fr 42%;gap:12px;align-items:center;padding:16px;border-radius:20px;color:var(--on-brand);background:linear-gradient(135deg,var(--brand),color-mix(in srgb,var(--brand) 60%,#000));box-shadow:var(--shadow);overflow:hidden}
+.drop::after{content:"";position:absolute;right:-60px;top:-60px;width:180px;height:180px;border-radius:50%;background:var(--member);opacity:.2}
+.drop .eyebrow{font-size:11px;letter-spacing:1.8px;font-weight:800;text-transform:uppercase;color:var(--highlight)}
+.drop h3{margin:6px 0 4px;font-size:21px;line-height:1.15}
+.drop p{margin:0 0 10px;font-size:13px;opacity:.88}
+.drop .prices{display:flex;align-items:baseline;gap:8px;margin-bottom:12px}
+.drop .prices b{font-size:22px}
+.drop .prices s{opacity:.7;font-size:14px}
+.drop .art{position:relative;z-index:1;background:rgba(255,255,255,.12);border-radius:16px;aspect-ratio:1;display:grid;place-items:center}
+.drop .art{overflow:hidden}.drop .art svg{width:86%;height:86%}.drop .art img{width:100%;height:100%;object-fit:cover}
+.drop-cta{border:0;border-radius:11px;background:var(--highlight);color:var(--on-highlight);font-weight:800;padding:10px 14px}
+.drop .ends{display:block;margin-top:8px;font-size:11.5px;opacity:.8}
+.drop .lock{display:inline-block;margin:4px 0 0;font-size:11px;font-weight:800;background:rgba(0,0,0,.25);border-radius:6px;padding:2px 6px;vertical-align:middle}
+
+/* member strip */
+.join-strip{display:flex;align-items:center;gap:12px;margin-top:14px;padding:12px 14px;border-radius:14px;background:var(--panel);border:1.5px dashed color-mix(in srgb,var(--member) 70%,var(--line))}
+.join-strip span{flex:1;font-size:13.5px}
+.join-strip b{color:var(--member-text)}
+.join-strip button{border:0;border-radius:10px;background:var(--member);color:var(--on-member);font-weight:700;padding:9px 12px;white-space:nowrap}
+
+/* sale row */
+.sale-row{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:4px;margin:0 -16px;padding-left:16px;padding-right:16px;scrollbar-width:none}
+.sale-row::-webkit-scrollbar{display:none}
+.sale-row .card{flex:0 0 42%;scroll-snap-align:start}
+
+/* chips + grid */
+.chips{display:flex;gap:8px;overflow-x:auto;margin:0 -16px 12px;padding:0 16px 2px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:8px 14px;font-size:13.5px;font-weight:600}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.card{position:relative;text-align:left;border:1px solid var(--line);background:var(--panel);border-radius:var(--radius);padding:10px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:6px}
+.card .thumb{aspect-ratio:1;border-radius:12px;background:var(--panel-2);display:grid;place-items:center;overflow:hidden}
+.card .thumb svg{width:82%;height:82%}.card .thumb img{width:100%;height:100%;object-fit:cover}
+.card .name{font-weight:650;font-size:14px;line-height:1.25}
+.price-line{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px;font-size:14px}
+.price-line b{font-size:15px}
+.price-line s{color:var(--muted);font-size:12.5px}
+.price-line .deal{color:var(--accent-text)}
+.member-hint{font-size:12px;color:var(--member-text);font-weight:600}
+.badge{position:absolute;top:16px;left:16px;font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;border-radius:6px;padding:3px 7px;color:var(--on-accent);background:var(--accent)}
+.badge.drop-b{background:var(--highlight);color:var(--on-highlight)}
+.badge.mem-b{background:var(--member);color:var(--on-member)}
+
+/* bottom tabs */
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:6;display:flex;justify-content:center;background:var(--panel);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+.tabs-inner{display:flex;width:100%;max-width:520px}
+.tab{position:relative;flex:1;border:0;background:none;display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 0 10px;font-size:11.5px;font-weight:600;color:var(--muted)}
+.tab svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tab[aria-current="page"]{color:var(--ink)}
+.tab[aria-current="page"]::before{content:"";position:absolute;top:0;left:30%;right:30%;height:3px;border-radius:0 0 3px 3px;background:var(--brand-text)}
+.tab .count{position:absolute;top:5px;left:calc(50% + 6px);min-width:18px;height:18px;border-radius:9px;background:var(--accent);color:var(--on-accent);font-size:10.5px;font-weight:800;display:grid;place-items:center;padding:0 5px}
+.tab .count[hidden],.tab .dot[hidden]{display:none}
+.tab .dot{position:absolute;top:7px;left:calc(50% + 8px);width:9px;height:9px;border-radius:50%;background:var(--reward);box-shadow:0 0 0 2px var(--panel)}
+
+/* product sheet */
+dialog.sheet{width:100%;max-width:520px;margin:auto auto 0;border:0;padding:0;border-radius:22px 22px 0 0;background:var(--panel);color:var(--ink);max-height:92dvh;overflow:auto}
+dialog.sheet::backdrop{background:rgba(10,12,10,.45)}
+dialog.sheet[open]{animation:up .28s cubic-bezier(.2,.8,.2,1)}
+@keyframes up{from{transform:translateY(40px);opacity:.4}}
+@media (prefers-reduced-motion:reduce){dialog.sheet[open]{animation:none}}
+.sheet-in{padding:14px 18px calc(18px + env(safe-area-inset-bottom))}
+.grab{width:40px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 10px}
+.sheet-close{position:absolute;top:12px;right:12px;width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--panel);font-size:20px;line-height:1}
+.sheet .hero{aspect-ratio:4/3;border-radius:16px;background:var(--panel-2);display:grid;place-items:center;overflow:hidden}
+.sheet .hero svg{width:70%;height:86%}.sheet .hero img{width:100%;height:100%;object-fit:contain}
+.sheet h3{margin:14px 0 2px;font-size:21px}
+.sheet .desc{margin:4px 0 10px;color:var(--muted);font-size:14px}
+.sheet .price-line{font-size:16px}.sheet .price-line b{font-size:22px}
+.why{display:inline-block;margin-left:2px;font-size:11.5px;font-weight:800;border-radius:6px;padding:2px 7px;background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent-text)}
+.why.member{background:color-mix(in srgb,var(--member) 22%,transparent);color:var(--member-text)}
+.label{display:block;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin:16px 0 8px}
+.sizes{display:flex;flex-wrap:wrap;gap:8px}
+.size{flex:1 0 52px;min-height:44px;border-radius:11px;border:1px solid var(--line);background:var(--panel);font-weight:700}
+.size[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.buy{display:flex;gap:10px;margin-top:18px}
+.qty{display:flex;align-items:center;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.qty button{width:42px;min-height:48px;border:0;background:none;font-size:20px}
+.qty output{min-width:24px;text-align:center;font-weight:700}
+.primary{flex:1;min-height:50px;border:0;border-radius:13px;background:var(--brand);color:var(--on-brand);font-weight:800;font-size:16px}
+.primary.join-btn{background:var(--member);color:var(--on-member)}
+.primary:disabled{opacity:.55;cursor:default}
+.hint{min-height:18px;margin:8px 0 0;font-size:13px;color:var(--accent-text);text-align:center}
+.nudge{margin-top:12px;padding:10px 12px;border-radius:12px;background:var(--panel-2);font-size:13px}
+.nudge button{border:0;background:none;color:var(--member-text);font-weight:800;padding:0;text-decoration:underline}
+
+/* cart */
+.line{display:grid;grid-template-columns:64px 1fr auto;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+.line .thumb{width:64px;height:64px;border-radius:12px;background:var(--panel-2);display:grid;place-items:center}
+.line .thumb{overflow:hidden}.line .thumb svg{width:80%;height:80%}.line .thumb img{width:100%;height:100%;object-fit:cover}
+.line b{display:block;font-size:14.5px}
+.line small{display:block;color:var(--muted);font-size:12.5px;margin:2px 0 7px}
+.line .qty button{width:34px;min-height:34px;font-size:17px}
+.line .right{text-align:right}
+.line .right b{font-size:15px}
+.link{border:0;background:none;color:var(--muted);text-decoration:underline;font-size:12.5px;padding:6px 0}
+.panel{margin-top:16px;padding:14px;border-radius:var(--radius);background:var(--panel);border:1px solid var(--line)}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.seg button{min-height:52px;border-radius:12px;border:1px solid var(--line);background:var(--panel);font-weight:700;font-size:14px;line-height:1.2}
+.seg button small{display:block;font-weight:500;font-size:12px;color:var(--muted);margin-top:2px}
+.seg button[aria-pressed="true"]{border-color:var(--brand-text);box-shadow:inset 0 0 0 1.5px var(--brand-text)}
+.row{display:flex;justify-content:space-between;margin:4px 0;font-size:14px;color:var(--muted)}
+.row.save{color:var(--member-text);font-weight:600}
+.row.total{color:var(--ink);font-size:18px;font-weight:800;margin-top:8px}
+.fine{font-size:12px;color:var(--muted);text-align:center;margin:10px 0 0}
+.empty{text-align:center;padding:50px 16px;color:var(--muted)}
+.empty b{display:block;font-size:19px;color:var(--ink);margin-bottom:6px}
+.ghost{margin-top:16px;border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:12px 18px;font-weight:700}
+.done{text-align:center;padding:26px 6px}
+.done .tick{width:64px;height:64px;margin:0 auto 12px;border-radius:50%;background:var(--brand);color:var(--on-brand);display:grid;place-items:center;font-size:30px;font-weight:800}
+.done h3{margin:0 0 4px;font-size:22px}
+.done p{margin:4px 0;color:var(--muted)}
+.done ul{list-style:none;padding:0;margin:16px 0 0;text-align:left}
+.done li{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
+.tag{display:inline-block;margin-top:12px;font-size:12px;border:1px solid var(--line);border-radius:8px;padding:4px 9px;color:var(--muted)}
+.earned{margin-top:14px;border:0;border-radius:12px;background:color-mix(in srgb,var(--reward) 30%,transparent);color:var(--ink);font-weight:700;padding:11px 14px}
+
+/* rewards */
+.punchcard{padding:18px 16px;border-radius:20px;background:var(--panel);border:1px solid var(--line);box-shadow:var(--shadow)}
+.punchcard.full{border-color:var(--reward);box-shadow:0 0 0 3px color-mix(in srgb,var(--reward) 35%,transparent),var(--shadow)}
+.punchcard .head{display:flex;justify-content:space-between;align-items:baseline}
+.punchcard .head b{font-size:18px}
+.punchcard .head span{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700}
+.punchcard p{margin:4px 0 14px;font-size:13.5px;color:var(--muted)}
+.punches{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.punch{aspect-ratio:1;border-radius:50%;border:2px dashed var(--line);display:grid;place-items:center;font-size:12px;font-weight:700;color:var(--muted)}
+.punch.on{border:0;background:var(--brand);color:var(--on-brand);box-shadow:0 3px 8px rgba(0,0,0,.18)}
+.punch.on svg{width:50%;height:50%;fill:none;stroke:var(--on-brand);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.punch.prize{border-style:solid;border-color:var(--reward);color:var(--reward-text);font-size:10px;letter-spacing:.5px}
+.punch.prize.on{background:var(--reward)}.punch.prize.on svg{stroke:var(--on-reward)}
+.punch.new{animation:stamp .5s cubic-bezier(.2,1.6,.4,1) both}
+@keyframes stamp{from{transform:scale(1.7) rotate(-15deg);opacity:0}}
+@media (prefers-reduced-motion:reduce){.punch.new{animation:none}}
+.bar{height:8px;border-radius:4px;background:var(--panel-2);margin:16px 0 8px;overflow:hidden}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--brand),var(--member));border-radius:4px;transition:width .5s}
+.bar-text{display:flex;justify-content:space-between;font-size:13px;color:var(--muted)}
+.bar-text b{color:var(--ink)}
+.ready{margin-top:14px;padding:16px;border-radius:16px;text-align:center;background:color-mix(in srgb,var(--reward) 22%,var(--panel));border:1px solid var(--reward)}
+.ready h3{margin:0 0 4px;font-size:20px}
+.ready p{margin:4px 0;font-size:13.5px;color:var(--muted)}
+.ready .ghost.arm{background:var(--reward);color:var(--on-reward);border-color:var(--reward)}
+ol.how{margin:0;padding-left:20px;font-size:14px;color:var(--muted)}
+ol.how li{margin:4px 0}
+.history{list-style:none;padding:0;margin:0}
+.history li{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
+.history li span:last-child{color:var(--brand-text);font-weight:700}
+
+/* members */
+.mcard{position:relative;padding:20px 18px;border-radius:20px;color:var(--on-brand);background:linear-gradient(135deg,var(--brand),color-mix(in srgb,var(--brand) 55%,#000));box-shadow:var(--shadow);overflow:hidden}
+.mcard::after{content:"";position:absolute;right:-40px;bottom:-70px;width:200px;height:200px;border-radius:50%;background:var(--member);opacity:.22}
+.mcard small{font-size:11px;letter-spacing:1.8px;font-weight:800;text-transform:uppercase;opacity:.85}
+.mcard h3{margin:6px 0 2px;font-size:22px}
+.mcard p{margin:2px 0;opacity:.9;font-size:14px}
+.mcard .big{font-size:30px;font-weight:800;margin-top:12px}
+.perks{list-style:none;padding:0;margin:0}
+.perks li{display:flex;gap:10px;align-items:flex-start;padding:8px 0;font-size:14.5px}
+.perks li::before{content:"✓";flex:none;width:22px;height:22px;border-radius:50%;background:color-mix(in srgb,var(--member) 25%,transparent);color:var(--member-text);display:grid;place-items:center;font-weight:800;font-size:13px}
+form.join label{display:block;font-size:13px;font-weight:600;margin:12px 0 5px}
+form.join input{width:100%;min-height:46px;border:1px solid var(--line);border-radius:11px;padding:10px 12px;background:var(--panel);font-size:16px}
+.info{list-style:none;padding:0;margin:0;font-size:14px}
+.info li{padding:9px 0;border-bottom:1px solid var(--line)}
+.info a{color:var(--brand-text);font-weight:600}
+.info li b{display:block;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+
+/* toast */
+.toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom));transform:translate(-50%,20px);width:min(92vw,480px);z-index:8;display:flex;align-items:center;gap:10px;padding:11px 12px 11px 14px;border-radius:14px;background:var(--ink);color:var(--bg);box-shadow:0 10px 30px rgba(0,0,0,.25);font-size:14px;opacity:0;pointer-events:none;transition:.25s}
+.toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+.toast span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.toast button{border:0;border-radius:9px;background:var(--accent);color:var(--on-accent);font-weight:800;padding:8px 11px;white-space:nowrap}
+
+:root{color-scheme:light}
+:root[data-theme="dark"]{color-scheme:dark}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){color-scheme:dark}}
+.theme-btn{flex:none;width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:var(--panel);display:grid;place-items:center;padding:0}
+.theme-btn svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.theme-btn .sun{display:none}
+:root[data-theme="dark"] .theme-btn .sun{display:block}:root[data-theme="dark"] .theme-btn .moon{display:none}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .theme-btn .sun{display:block}:root:not([data-theme="light"]) .theme-btn .moon{display:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="logo" id="logo"></div>
+    <div class="brand-name"><b id="store-name"></b><small id="store-tagline"></small></div>
+    <button class="member-chip" id="member-chip" type="button"></button>
+    <button class="theme-btn" id="theme-btn" type="button" aria-label="Switch to dark mode"><svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/></svg><svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+  </header>
+
+  <main>
+    <section class="view active" id="view-shop" aria-label="Shop">
+      <div id="drop-slot"></div>
+      <div id="join-slot"></div>
+      <div id="sale-slot"></div>
+      <h2 class="section">Shop</h2>
+      <div class="chips" id="chips" role="group" aria-label="Categories"></div>
+      <div class="grid" id="grid"></div>
+    </section>
+    <section class="view" id="view-rewards" aria-label="Rewards"></section>
+    <section class="view" id="view-members" aria-label="Members"></section>
+    <section class="view" id="view-cart" aria-label="Cart"></section>
+  </main>
+</div>
+
+<nav class="tabs" aria-label="Main">
+  <div class="tabs-inner">
+    <button class="tab" data-view="shop" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5 5.5 4h13L20 9.5"/><path d="M4 9.5h16v1a3 3 0 0 1-5.3 1.9A3 3 0 0 1 12 13.5a3 3 0 0 1-2.7-1.1A3 3 0 0 1 4 10.5v-1Z"/><path d="M5.5 13v7h13v-7"/></svg>Shop</button>
+    <button class="tab" data-view="rewards" id="tab-rewards"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2.5"/><circle cx="8" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="16" cy="12" r="1.5"/></svg>Rewards<span class="dot" hidden></span></button>
+    <button class="tab" data-view="members" id="tab-members"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9L12 3Z"/></svg>Members</button>
+    <button class="tab" data-view="cart" id="tab-cart"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8h12l-1 12H7L6 8Z"/><path d="M9 10V7a3 3 0 0 1 6 0v3"/></svg>Cart<span class="count" hidden></span></button>
+  </div>
+</nav>
+
+<dialog class="sheet" id="sheet" aria-label="Product"><div class="sheet-in" id="sheet-in"></div></dialog>
+<div class="toast" id="toast" role="status"><span></span><button type="button">View cart</button></div>
+
+<script>
+'use strict';
+const CFG = JSON.parse(document.getElementById('shop-config').textContent);
+const S = CFG.store, API = (CFG.api || '').replace(/\/+$/, '');
+const PRODUCTS = CFG.products, byId = Object.fromEntries(PRODUCTS.map(p => [p.id, p]));
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const money = n => '$' + (Math.round(n * 100) / 100).toFixed(2);
+const round2 = n => Math.round(n * 100) / 100;
+const whole = n => money(n).replace(/\.00$/, '');
+const KEY = 'shop:' + (S.name || 'shop').toLowerCase().replace(/[^a-z0-9]+/g, '-') + ':';
+const load = (k, d) => { try { const v = JSON.parse(localStorage.getItem(KEY + k)); return v ?? d } catch { return d } };
+const store = (k, v) => { try { localStorage.setItem(KEY + k, JSON.stringify(v)) } catch {} };
+
+
+// ---------- Colors: picks readable text for every shop color, in light and dark mode ----------
+function applyColors(c, fallback) {
+  const hex = h => { h = String(h || '').trim().replace('#', ''); if (h.length === 3) h = h.replace(/./g, x => x + x); return /^[0-9a-f]{6}$/i.test(h) ? '#' + h.toLowerCase() : null };
+  const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const lum = h => { const [r, g, b] = rgb(h).map(v => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4 }); return .2126 * r + .7152 * g + .0722 * b };
+  const contrast = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05) };
+  const mix = (a, b, t) => '#' + rgb(a).map((v, i) => Math.round(v + (rgb(b)[i] - v) * t).toString(16).padStart(2, '0')).join('');
+  const ink = h => contrast(h, '#ffffff') >= contrast(h, '#0e1a2b') ? '#ffffff' : '#0e1a2b';
+  const readable = (h, bg, toward, min = 4.5) => { let t = 0, out = h; while (contrast(out, bg) < min && t < 1) { t += .05; out = mix(h, toward, t) } return out };
+  const visible = (h, bg, min) => readable(h, bg, '#ffffff', min); // lift very dark colors so they show on a dark background
+  const brand = hex(c.brand) || hex(fallback) || '#2f6f4f';
+  const p = { brand, accent: hex(c.accent) || '#c2462f', member: hex(c.member) || brand, reward: hex(c.reward) || '#e0a92a', highlight: hex(c.highlight) || hex(c.accent) || '#ffffff' };
+  const LIGHT = '#ffffff', DARK = '#121b2c';
+  const vars = mode => {
+    const bg = mode === 'dark' ? DARK : LIGHT, toward = mode === 'dark' ? '#ffffff' : '#000000';
+    const surf = h => mode === 'dark' ? visible(h, DARK, 1.6) : h;
+    const v = {};
+    for (const [k, h] of Object.entries(p)) { const s = surf(h); v['--' + k] = s; v['--on-' + k] = ink(s); v['--' + k + '-text'] = readable(h, bg, toward) }
+    return Object.entries(v).map(([k, x]) => `${k}:${x}`).join(';');
+  };
+  const css = `:root{${vars('light')}}@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){${vars('dark')}}}:root[data-theme="dark"]{${vars('dark')}}`;
+  let el = document.getElementById('shop-colors'); if (!el) { el = document.createElement('style'); el.id = 'shop-colors'; document.head.appendChild(el) }
+  el.textContent = css;
+}
+
+// ---------- Branding ----------
+document.title = S.name;
+applyColors(S.colors || {}, S.brandColor || '#2f6f4f');
+$('meta[name=theme-color]').content = (S.colors && S.colors.brand) || S.brandColor || '#2f6f4f';
+$('#store-name').textContent = S.name; $('#store-tagline').textContent = S.tagline || '';
+$('#logo').innerHTML = S.logo ? `<img src="${esc(S.logo)}" alt="">` : esc(S.initials || S.name.slice(0, 2).toUpperCase());
+
+// ---------- Product art (used when a product has no photo) ----------
+function art(p) {
+  const up = live.photos && live.photos[p.id];
+  if (up && API) return `<img src="${esc(API + '/photo/' + encodeURIComponent(p.id) + '?v=' + up)}" alt="" loading="lazy">`;
+  if (p.image) return `<img src="${esc(p.image)}" alt="" loading="lazy">`;
+  const c = p.color || '#888', dark = c.match(/^#(..)(..)(..)$/) ? (parseInt(RegExp.$1,16)*.3 + parseInt(RegExp.$2,16)*.59 + parseInt(RegExp.$3,16)*.11) < 140 : true;
+  const line = dark ? 'rgba(255,255,255,.35)' : 'rgba(0,0,0,.18)', mark = dark ? 'rgba(255,255,255,.85)' : 'rgba(0,0,0,.55)';
+  const ini = esc((S.initials || 'S').slice(0, 2));
+  const shapes = {
+    tee: `<path d="M38 14 22 22 12 44l14 6 4-8v52h40V42l4 8 14-6-10-22-16-8c-2 6-7 10-12 10s-10-4-12-10Z" fill="${c}" stroke="${line}" stroke-width="1.5"/><text x="50" y="60" text-anchor="middle" font-size="11" font-weight="800" fill="${mark}" font-family="system-ui">${ini}</text>`,
+    hoodie: `<path d="M34 24c0-16 32-16 32 0" fill="${c}" stroke="${line}" stroke-width="1.5" style="filter:brightness(.85)"/><path d="M34 18 20 26 8 70l13 4 9-30v50h40V44l9 30 13-4-12-44-14-8c-3 8-9 12-16 12s-13-4-16-12Z" fill="${c}" stroke="${line}" stroke-width="1.5"/><path d="M47 30v12M53 30v12" stroke="${line}" stroke-width="1.5"/><path d="M38 70h24l-3 14H41Z" fill="none" stroke="${line}" stroke-width="1.5"/><text x="50" y="60" text-anchor="middle" font-size="10" font-weight="800" fill="${mark}" font-family="system-ui">${ini}</text>`,
+    cap: `<path d="M20 62c0-20 13-34 30-34s30 14 30 34Z" fill="${c}" stroke="${line}" stroke-width="1.5"/><path d="M14 62h72c0 7-14 10-36 10S14 69 14 62Z" fill="${c}" stroke="${line}" stroke-width="1.5" style="filter:brightness(.85)"/><circle cx="50" cy="28" r="3" fill="${line}"/><text x="50" y="52" text-anchor="middle" font-size="11" font-weight="800" fill="${mark}" font-family="system-ui">${ini}</text>`,
+    tote: `<path d="M38 34v-8a12 12 0 0 1 24 0v8" fill="none" stroke="${dark?c:'#8a7a5c'}" stroke-width="4"/><path d="M24 34h52l-4 56H28Z" fill="${c}" stroke="${line}" stroke-width="1.5"/><text x="50" y="66" text-anchor="middle" font-size="12" font-weight="800" fill="${mark}" font-family="system-ui">${ini}</text>`,
+    mug: `<path d="M24 30h42v46a10 10 0 0 1-10 10H34a10 10 0 0 1-10-10Z" fill="${c}" stroke="${dark?line:'rgba(0,0,0,.25)'}" stroke-width="1.5"/><path d="M66 40h6a10 10 0 0 1 0 20h-6" fill="none" stroke="${dark?line:'rgba(0,0,0,.25)'}" stroke-width="4"/><text x="45" y="62" text-anchor="middle" font-size="12" font-weight="800" fill="${mark}" font-family="system-ui">${ini}</text>`,
+    sticker: `<rect x="22" y="26" width="40" height="40" rx="9" fill="${c}" transform="rotate(-10 42 46)"/><circle cx="62" cy="58" r="18" fill="${c}" stroke="#fff" stroke-width="3" style="filter:hue-rotate(140deg)"/><text x="62" y="62" text-anchor="middle" font-size="10" font-weight="800" fill="#fff" font-family="system-ui">${ini}</text>`,
+  };
+  return `<svg viewBox="0 0 100 100" aria-hidden="true">${shapes[p.art] || `<rect x="22" y="22" width="56" height="56" rx="12" fill="${c}"/><text x="50" y="56" text-anchor="middle" font-size="13" font-weight="800" fill="${mark}" font-family="system-ui">${ini}</text>`}</svg>`;
+}
+
+// ---------- Live settings: weekly drop, sales, member discount ----------
+// With no "api" set the app runs in practice mode using the "demo" values above.
+let live = { drop: CFG.demo?.drop || null, sales: CFG.demo?.sales || {}, memberPercent: CFG.members?.percentOff ?? 0, photos: {} };
+let member = load('member', null);
+const isMember = () => !!(CFG.members?.enabled && member && member.email);
+function activeDrop() {
+  const d = live.drop;
+  if (!d || !byId[d.id] || !(d.price > 0)) return null;
+  if (d.ends && Date.now() > new Date(d.ends + 'T23:59:59').getTime()) return null;
+  return d;
+}
+// The customer always pays the single lowest price they qualify for. Deals don't stack.
+function priceOf(p, asMember = isMember()) {
+  let price = p.price, why = '';
+  const sale = Number(live.sales[p.id]);
+  if (sale > 0 && sale < price) { price = sale; why = 'sale' }
+  const d = activeDrop();
+  if (d && d.id === p.id && (!d.membersOnly || asMember) && d.price < price) { price = d.price; why = 'drop' }
+  const mp = memberPriceOf(p);
+  if (asMember && mp < price) { price = mp; why = 'member' }
+  return { price: round2(price), was: p.price, why, memberPrice: mp };
+}
+function memberPriceOf(p) {
+  if (!CFG.members?.enabled) return Infinity;
+  if (p.memberPrice > 0) return p.memberPrice;
+  const pct = Number(live.memberPercent) || 0;
+  return pct > 0 ? round2(p.price * (1 - pct / 100)) : Infinity;
+}
+
+// ---------- Shop view ----------
+let category = 'All';
+function priceHTML(p) {
+  const r = priceOf(p);
+  let h = `<div class="price-line">${r.why ? `<b class="deal">${money(r.price)}</b><s>${money(r.was)}</s>` : `<b>${money(r.price)}</b>`}</div>`;
+  if (!isMember() && r.memberPrice < r.price) h += `<div class="member-hint">${money(r.memberPrice)} for members</div>`;
+  return h;
+}
+function badgeFor(p) {
+  const r = priceOf(p), d = activeDrop();
+  if (d && d.id === p.id) return `<span class="badge drop-b">Drop</span>`;
+  if (r.why === 'sale') return `<span class="badge">Sale</span>`;
+  if (r.why === 'member') return `<span class="badge mem-b">Member</span>`;
+  return '';
+}
+function cardHTML(p) {
+  return `<button class="card" type="button" data-id="${esc(p.id)}" aria-label="${esc(p.name)}">${badgeFor(p)}<div class="thumb">${art(p)}</div><div class="name">${esc(p.name)}</div>${priceHTML(p)}</button>`;
+}
+function renderShop() {
+  const d = activeDrop(), dp = d && byId[d.id];
+  if (dp) {
+    const locked = d.membersOnly && !isMember();
+    const days = d.ends ? Math.ceil((new Date(d.ends + 'T23:59:59') - Date.now()) / 864e5) : null;
+    $('#drop-slot').innerHTML = `<div class="drop"><div style="position:relative;z-index:1"><div class="eyebrow">This week's drop</div>${d.membersOnly ? '<span class="lock">Members only</span>' : ''}<h3>${esc(d.title || dp.name)}</h3><p>${esc(d.note || dp.desc || '')}</p><div class="prices"><b>${money(d.price)}</b><s>${money(dp.price)}</s></div><button class="drop-cta" type="button" data-id="${esc(dp.id)}">${locked ? 'Join to unlock' : 'Grab it'}</button>${days !== null && days < 400 ? `<span class="ends">${days <= 1 ? 'Ends today' : `Ends in ${days} days`}</span>` : ''}</div><div class="art">${art(dp)}</div></div>`;
+  } else $('#drop-slot').innerHTML = '';
+  $('#join-slot').innerHTML = CFG.members?.enabled && !isMember() && Number(live.memberPercent) > 0
+    ? `<div class="join-strip"><span>Members save <b>${Number(live.memberPercent)}%</b> on everything. Free to join.</span><button type="button" data-go="members">Join</button></div>` : '';
+  const onSale = PRODUCTS.filter(p => Number(live.sales[p.id]) > 0 && Number(live.sales[p.id]) < p.price);
+  $('#sale-slot').innerHTML = onSale.length ? `<h2 class="section">On sale</h2><div class="sale-row">${onSale.map(cardHTML).join('')}</div>` : '';
+  const cats = ['All', ...(CFG.categories || [...new Set(PRODUCTS.map(p => p.category))])];
+  $('#chips').innerHTML = cats.map(c => `<button class="chip" type="button" aria-pressed="${c === category}">${esc(c)}</button>`).join('');
+  $('#grid').innerHTML = PRODUCTS.filter(p => category === 'All' || p.category === category).map(cardHTML).join('');
+}
+function renderChip() {
+  $('#member-chip').textContent = isMember() ? '★ Member' : (CFG.members?.enabled ? 'Join & save' : '');
+  $('#member-chip').classList.toggle('is-member', isMember());
+  $('#member-chip').hidden = !CFG.members?.enabled;
+}
+$('#chips').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; category = b.textContent; renderShop() });
+document.addEventListener('click', e => {
+  const card = e.target.closest('[data-id]'); if (card && !card.closest('dialog')) { openProduct(card.dataset.id); return }
+  const go = e.target.closest('[data-go]'); if (go) { e.preventDefault(); show(go.dataset.go) }
+});
+$('#member-chip').onclick = () => show('members');
+
+// ---------- Product sheet ----------
+const sheet = $('#sheet');
+let pick = { id: null, size: null, qty: 1 };
+function openProduct(id) {
+  const p = byId[id]; if (!p) return;
+  const r = priceOf(p), d = activeDrop(), single = p.sizes.length <= 1;
+  pick = { id, size: single ? (p.sizes[0] || 'One size') : null, qty: 1 };
+  const whyLabel = { sale: 'Sale', drop: "This week's drop", member: 'Member price' }[r.why];
+  const lockedDrop = d && d.id === p.id && d.membersOnly && !isMember();
+  $('#sheet-in').innerHTML = `<div class="grab"></div><button class="sheet-close" type="button" aria-label="Close">×</button>
+    <div class="hero">${art(p)}</div><h3>${esc(p.name)}</h3>
+    <div class="price-line">${r.why ? `<b class="deal">${money(r.price)}</b><s>${money(r.was)}</s><span class="why ${r.why === 'member' ? 'member' : ''}">${whyLabel}</span>` : `<b>${money(r.price)}</b>`}</div>
+    <p class="desc">${esc(p.desc || '')}</p>
+    ${!isMember() && (r.memberPrice < r.price || lockedDrop) ? `<div class="nudge">${lockedDrop ? `Members get this week's drop price of <b>${money(d.price)}</b>.` : `Members pay <b>${money(r.memberPrice)}</b>.`} <button type="button" data-go="members">Join free</button></div>` : ''}
+    ${single ? `<span class="label">Size</span><div style="font-size:14px">${esc(pick.size)}</div>` : `<span class="label" id="size-l">Choose a size</span><div class="sizes" role="group" aria-labelledby="size-l">${p.sizes.map(s => `<button class="size" type="button" aria-pressed="false">${esc(s)}</button>`).join('')}</div>`}
+    <div class="buy"><div class="qty" role="group" aria-label="Quantity"><button type="button" data-q="-1" aria-label="One less">−</button><output>1</output><button type="button" data-q="1" aria-label="One more">+</button></div><button class="primary" type="button" id="add">Add to cart · ${money(r.price)}</button></div>
+    <p class="hint" aria-live="polite"></p>`;
+  sheet.showModal();
+}
+sheet.addEventListener('click', e => {
+  if (e.target === sheet) { sheet.close(); return }
+  if (e.target.closest('.sheet-close')) { sheet.close(); return }
+  const go = e.target.closest('[data-go]'); if (go) { sheet.close(); show(go.dataset.go); return }
+  const sz = e.target.closest('.size');
+  if (sz) { pick.size = sz.textContent; sheet.querySelectorAll('.size').forEach(b => b.setAttribute('aria-pressed', String(b === sz))); sheet.querySelector('.hint').textContent = ''; return }
+  const q = e.target.closest('[data-q]');
+  if (q) { pick.qty = Math.max(1, Math.min(20, pick.qty + Number(q.dataset.q))); sheet.querySelector('.qty output').textContent = pick.qty; sheet.querySelector('#add').textContent = `Add to cart · ${money(priceOf(byId[pick.id]).price * pick.qty)}`; return }
+  if (e.target.closest('#add')) {
+    if (!pick.size) { sheet.querySelector('.hint').textContent = 'Pick a size first'; sheet.querySelector('.size')?.focus(); return }
+    addToCart(pick.id, pick.size, pick.qty); sheet.close();
+    const p = byId[pick.id];
+    toast(`Added ${pick.qty > 1 ? pick.qty + ' × ' : ''}${p.name}${p.sizes.length > 1 ? ' (' + pick.size + ')' : ''}`);
+  }
+});
+
+// ---------- Cart ----------
+let cart = load('cart', []).filter(l => byId[l.id] && l.qty > 0);
+let fulfil = load('fulfil', 'pickup'); if (!CFG.shipping?.enabled) fulfil = 'pickup';
+let cartView = 'cart', lastOrder = null;
+const saveCart = () => { store('cart', cart); store('fulfil', fulfil); renderCount() };
+function addToCart(id, size, qty) { const l = cart.find(x => x.id === id && x.size === size); if (l) l.qty = Math.min(20, l.qty + qty); else cart.push({ id, size, qty }); saveCart() }
+function totals(asMember = isMember()) {
+  let sub = 0, regular = 0;
+  for (const l of cart) { const p = byId[l.id], r = priceOf(p, asMember); sub += r.price * l.qty; regular += p.price * l.qty }
+  const ship = fulfil === 'ship' && CFG.shipping?.enabled ? Number(CFG.shipping.flat) || 0 : 0;
+  return { sub: round2(sub), saved: round2(regular - sub), ship, total: round2(sub + ship) };
+}
+function renderCount() { const n = cart.reduce((a, l) => a + l.qty, 0), c = $('#tab-cart .count'); c.hidden = !n; c.textContent = n > 99 ? '99+' : n }
+function renderCart() {
+  const v = $('#view-cart');
+  if (cartView === 'done' && lastOrder) { v.innerHTML = doneHTML(lastOrder); return }
+  if (!cart.length) { v.innerHTML = `<div class="empty"><b>Your cart is empty</b>Find something you like in the shop.<br><button class="ghost" type="button" data-go="shop">Start shopping</button></div>`; return }
+  const t = totals(), nonMember = totals(true);
+  v.innerHTML = `<h2 class="section" style="margin-top:4px">Your cart</h2>
+  ${cart.map((l, i) => { const p = byId[l.id], r = priceOf(p); return `<div class="line"><div class="thumb">${art(p)}</div><div><b>${esc(p.name)}</b><small>${p.sizes.length > 1 ? 'Size ' + esc(l.size) + ' · ' : ''}${money(r.price)} each${r.why ? ` <s>${money(r.was)}</s>` : ''}</small><div class="qty" style="display:inline-flex"><button type="button" data-line="${i}" data-d="-1" aria-label="One less">−</button><output>${l.qty}</output><button type="button" data-line="${i}" data-d="1" aria-label="One more">+</button></div></div><div class="right"><b>${money(r.price * l.qty)}</b><br><button class="link" type="button" data-remove="${i}">Remove</button></div></div>` }).join('')}
+  <div class="panel">
+    ${CFG.shipping?.enabled ? `<div class="seg" role="group" aria-label="Pickup or shipping"><button type="button" data-f="pickup" aria-pressed="${fulfil === 'pickup'}">Pick up in store<small>Free</small></button><button type="button" data-f="ship" aria-pressed="${fulfil === 'ship'}">Ship to me<small>${money(CFG.shipping.flat)} flat</small></button></div>` : ''}
+    <div class="row"><span>Subtotal</span><span>${money(t.sub)}</span></div>
+    ${t.saved > 0 ? `<div class="row save"><span>You're saving</span><span>−${money(t.saved)}</span></div>` : ''}
+    ${CFG.shipping?.enabled ? `<div class="row"><span>${fulfil === 'ship' ? 'Shipping' : 'Pickup'}</span><span>${t.ship ? money(t.ship) : 'Free'}</span></div>` : ''}
+    <div class="row total"><span>Total</span><span>${money(t.total)}</span></div>
+    ${!isMember() && CFG.members?.enabled && nonMember.sub < t.sub ? `<div class="nudge">Members would pay <b>${money(nonMember.total)}</b> for this cart. <button type="button" data-go="members">Join free</button></div>` : ''}
+    <button class="primary" type="button" id="checkout" style="width:100%;margin-top:14px">Checkout · ${money(t.total)}</button>
+    <p class="fine" id="checkout-note">${API ? 'Secure payment by Stripe.' : 'Practice mode: no card is charged.'}</p>
+  </div>`;
+}
+$('#view-cart').addEventListener('click', async e => {
+  const d = e.target.closest('[data-d]');
+  if (d) { const l = cart[+d.dataset.line]; l.qty = Math.min(20, l.qty + Number(d.dataset.d)); if (l.qty <= 0) cart.splice(+d.dataset.line, 1); saveCart(); renderCart(); return }
+  const rm = e.target.closest('[data-remove]'); if (rm) { cart.splice(+rm.dataset.remove, 1); saveCart(); renderCart(); return }
+  const f = e.target.closest('[data-f]'); if (f) { fulfil = f.dataset.f; saveCart(); renderCart(); return }
+  if (e.target.closest('#rewards-link')) { show('rewards'); return }
+  if (e.target.closest('#checkout')) checkout(e.target.closest('#checkout'));
+});
+
+async function checkout(btn) {
+  if (!cart.length) return;
+  const t = totals(), lines = cart.map(l => ({ ...l, price: priceOf(byId[l.id]).price }));
+  btn.disabled = true;
+  if (!API) {
+    btn.textContent = 'Placing order…'; await new Promise(r => setTimeout(r, 800));
+    finishOrder({ id: 'P-' + Math.floor(1000 + Math.random() * 9000), lines, total: t.total, spent: t.sub, fulfil, practice: true });
+    return;
+  }
+  btn.textContent = 'Opening secure checkout…';
+  try {
+    const res = await fetch(API + '/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: cart.map(({ id, size, qty }) => ({ id, size, qty })), fulfilment: fulfil, memberEmail: isMember() ? member.email : '', returnUrl: location.href.split(/[?#]/)[0] }) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.url) throw new Error(data.error || 'Checkout is unavailable right now');
+    try { sessionStorage.setItem(KEY + 'pending', JSON.stringify({ lines, total: t.total, spent: t.sub, fulfil })) } catch {}
+    location.href = data.url;
+  } catch (err) {
+    btn.disabled = false; btn.textContent = `Checkout · ${money(t.total)}`;
+    const n = $('#checkout-note'); n.textContent = err.message + '. Please try again.'; n.style.color = 'var(--accent-text)';
+  }
+}
+function finishOrder(o) {
+  cart = []; saveCart();
+  o.punch = earnPunches(o.key || o.id, o.spent, o.practice);
+  lastOrder = o; cartView = 'done'; show('cart');
+}
+function doneHTML(o) {
+  const pr = o.punch, R = CFG.rewards;
+  return `<div class="done"><div class="tick">✓</div><h3>Order placed</h3><p>Order <b>${esc(o.id)}</b></p>
+  <p>${o.fulfil === 'ship' ? "We'll email you when it ships." : "We'll have it ready at the counter. Bring your order number."}</p>
+  ${o.lines ? `<ul>${o.lines.map(l => { const p = byId[l.id]; return p ? `<li><span>${l.qty} × ${esc(p.name)}${p.sizes.length > 1 ? ' (' + esc(l.size) + ')' : ''}</span><span>${money(l.price * l.qty)}</span></li>` : '' }).join('')}<li><b>Total</b><b>${money(o.total)}</b></li></ul>` : ''}
+  ${o.practice ? '<span class="tag">Practice order · no card charged</span>' : ''}
+  ${R?.enabled && pr ? `<br><button class="earned" type="button" id="rewards-link">${pr.full ? `Card complete: you've earned a ${esc(R.reward)}!` : pr.earned > 0 ? `+${pr.earned} punch${pr.earned > 1 ? 'es' : ''} · ${pr.now} of ${R.punches} on your card` : `${money(pr.toNext)} to your next punch`}</button>` : ''}
+  <br><button class="ghost" type="button" data-go="shop">Keep shopping</button></div>`;
+}
+
+// ---------- Rewards punch card ----------
+const R = CFG.rewards || {}, GOAL = (R.punchValue || 20) * (R.punches || 10);
+let rw = load('rewards', { spent: 0, claimed: 0, orders: [] }), fresh = -1, armT;
+const onCard = () => Math.max(0, rw.spent - rw.claimed * GOAL);
+const punchesFor = d => Math.min(R.punches, Math.floor(d / R.punchValue + 1e-9));
+function earnPunches(id, spent, practice) {
+  if (!R.enabled || !(spent > 0)) return null;
+  if (practice && API) return null; // once Stripe is connected, only paid orders count
+  if (rw.orders.some(o => o.id === id)) return null; // each order counts once
+  const before = punchesFor(onCard());
+  rw.spent = round2(rw.spent + spent);
+  const now = punchesFor(onCard());
+  rw.orders.unshift({ id, at: Date.now(), spent, punches: now - before, practice: !!practice }); rw.orders = rw.orders.slice(0, 30);
+  store('rewards', rw); fresh = now > before ? before : -1; renderDot();
+  return { earned: now - before, now, full: now >= R.punches, toNext: R.punchValue - (onCard() % R.punchValue) };
+}
+function renderDot() { $('#tab-rewards .dot').hidden = !(R.enabled && punchesFor(onCard()) >= R.punches) }
+const check = '<svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
+function renderRewards() {
+  const v = $('#view-rewards');
+  if (!R.enabled) { v.innerHTML = '<div class="empty"><b>Rewards are coming soon</b></div>'; return }
+  const d = onCard(), n = punchesFor(d), full = n >= R.punches;
+  v.innerHTML = `<div class="punchcard${full ? ' full' : ''}" role="img" aria-label="${n} of ${R.punches} punches">
+    <div class="head"><b>${esc(S.name)}</b><span>Rewards</span></div>
+    <p>Every ${whole(R.punchValue)} you spend earns a punch. Fill all ${R.punches} for a <b>${esc(R.reward)}</b>.</p>
+    <div class="punches">${Array.from({ length: R.punches }, (_, i) => { const on = i < n, last = i === R.punches - 1; return `<span class="punch${on ? ' on' : ''}${last ? ' prize' : ''}${on && fresh >= 0 && i >= fresh ? ' new' : ''}" style="animation-delay:${Math.max(0, i - fresh) * .12}s">${on ? check : last ? 'FREE' : i + 1}</span>` }).join('')}</div>
+    <div class="bar"><i style="width:${Math.min(100, d / GOAL * 100)}%"></i></div>
+    <div class="bar-text"><span><b>${money(Math.min(d, GOAL))}</b> of ${whole(GOAL)}</span><span>${full ? 'Card complete' : `${money(R.punchValue - (d % R.punchValue))} to next punch`}</span></div>
+  </div>
+  ${full ? `<div class="ready"><h3>You've earned a ${esc(R.reward)}!</h3><p>Show this screen at the counter to claim it.</p>${d > GOAL ? `<p>${money(d - GOAL)} carries over to your next card.</p>` : ''}<button class="ghost" type="button" id="claim">Staff: mark as claimed</button></div>` : ''}
+  <h2 class="section">How it works</h2><ol class="how"><li>Shop in the app.</li><li>Every ${whole(R.punchValue)} spent stamps a punch (after discounts, not counting shipping).</li><li>${R.punches} punches = a ${esc(R.reward)}.</li></ol>
+  <h2 class="section">Your orders</h2>${rw.orders.length ? `<ul class="history">${rw.orders.slice(0, 8).map(o => `<li><span>${new Date(o.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} · ${money(o.spent)}${o.practice ? ' (practice)' : ''}</span><span>${o.punches ? `+${o.punches}` : '—'}</span></li>`).join('')}</ul>` : '<p class="fine" style="text-align:left">No orders yet. Your first order starts the card.</p>'}
+  <p class="fine">${API ? 'Only paid orders earn punches.' : 'Practice mode: test orders earn punches so you can see the card work.'} Your card is saved on this phone.</p>`;
+  fresh = -1;
+}
+$('#view-rewards').addEventListener('click', e => {
+  const b = e.target.closest('#claim'); if (!b) return;
+  if (!b.classList.contains('arm')) { b.classList.add('arm'); b.textContent = 'Tap again to confirm'; clearTimeout(armT); armT = setTimeout(() => { b.classList.remove('arm'); b.textContent = 'Staff: mark as claimed' }, 4000); return }
+  rw.claimed++; store('rewards', rw); renderDot(); renderRewards();
+});
+
+// ---------- Members ----------
+function renderMembers() {
+  const v = $('#view-members'), M = CFG.members || {};
+  const info = `<h2 class="section">Visit us</h2><ul class="info">${S.address ? `<li><b>Address</b>${esc(S.address)}</li>` : ''}${S.hours ? `<li><b>Hours</b>${esc(S.hours)}</li>` : ''}${S.phone ? `<li><b>Phone</b><a href="tel:${esc(S.phone.replace(/[^\d+]/g, ''))}">${esc(S.phone)}</a></li>` : ''}${S.email ? `<li><b>Email</b><a href="mailto:${esc(S.email)}">${esc(S.email)}</a></li>` : ''}</ul>`;
+  if (!M.enabled) { v.innerHTML = info; return }
+  const pct = Number(live.memberPercent) || 0;
+  if (isMember()) {
+    v.innerHTML = `<div class="mcard"><small>${esc(S.name)} member</small><h3>${esc(member.name || 'Welcome back')}</h3><p>${esc(member.email)}</p><p>Member since ${new Date(member.since).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</p>${pct ? `<div class="big">${pct}% off</div><p>Applied automatically at checkout</p>` : ''}</div>
+    <h2 class="section">Your perks</h2><ul class="perks">${(M.perks || []).map(x => `<li>${esc(x)}</li>`).join('')}</ul>${info}
+    <button class="link" type="button" id="leave" style="margin-top:14px">Remove membership from this phone</button>`;
+  } else {
+    v.innerHTML = `<div class="mcard"><small>Members</small><h3>Join ${esc(S.name)}</h3>${pct ? `<div class="big">Save ${pct}%</div>` : ''}<p>It's free. Prices drop the moment you join.</p></div>
+    <h2 class="section">What you get</h2><ul class="perks">${(M.perks || []).map(x => `<li>${esc(x)}</li>`).join('')}</ul>
+    <form class="join" id="join" novalidate><label for="j-name">First name</label><input id="j-name" autocomplete="given-name" required maxlength="40">
+    <label for="j-email">Email</label><input id="j-email" type="email" autocomplete="email" inputmode="email" required maxlength="120">
+    <label for="j-phone">Phone <span style="color:var(--muted);font-weight:400">(optional)</span></label><input id="j-phone" type="tel" autocomplete="tel" maxlength="30">
+    <button class="primary join-btn" type="submit" style="width:100%;margin-top:16px">Join free</button><p class="hint" id="join-hint" aria-live="polite"></p>
+    <p class="fine">We only use this for ${esc(S.name)} deals and your orders. Leave any time.</p></form>${info}`;
+  }
+}
+$('#view-members').addEventListener('submit', async e => {
+  e.preventDefault();
+  const name = $('#j-name').value.trim(), email = $('#j-email').value.trim().toLowerCase(), phone = $('#j-phone').value.trim(), hint = $('#join-hint');
+  if (!name) { hint.textContent = 'Please add your first name.'; $('#j-name').focus(); return }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { hint.textContent = 'Please check your email address.'; $('#j-email').focus(); return }
+  const btn = e.target.querySelector('button[type=submit]'); btn.disabled = true; btn.textContent = 'Joining…';
+  try {
+    if (API) { const r = await fetch(API + '/join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, email, phone }) }); const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || 'Could not join right now') }
+    member = { name, email, phone, since: Date.now() }; store('member', member);
+    renderAll(); toast(`Welcome, ${name}! Member prices are on.`, false);
+  } catch (err) { hint.textContent = err.message; btn.disabled = false; btn.textContent = 'Join free' }
+});
+$('#view-members').addEventListener('click', e => {
+  if (!e.target.closest('#leave')) return;
+  member = null; try { localStorage.removeItem(KEY + 'member') } catch {} renderAll();
+});
+
+// ---------- Navigation, toast ----------
+function show(name) {
+  if (sheet.open) sheet.close();
+  $('#toast').classList.remove('show');
+  if (name !== 'cart' && cartView === 'done') { cartView = 'cart' }
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
+  document.querySelectorAll('.tab').forEach(t => t.dataset.view === name ? t.setAttribute('aria-current', 'page') : t.removeAttribute('aria-current'));
+  ({ shop: renderShop, rewards: renderRewards, members: renderMembers, cart: renderCart })[name]?.();
+  window.scrollTo({ top: 0 });
+}
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => show(t.dataset.view)));
+let toastT;
+function toast(text, withCart = true) { const t = $('#toast'); t.querySelector('span').textContent = text; t.querySelector('button').hidden = !withCart; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 3200) }
+$('#toast button').onclick = () => { $('#toast').classList.remove('show'); show('cart') };
+function renderAll() { const cur = document.querySelector('.view.active')?.id.replace('view-', '') || 'shop'; renderCount(); renderDot(); renderChip(); show(cur) }
+
+// ---------- Start ----------
+if (!R.enabled) $('#tab-rewards').hidden = true;
+renderAll();
+// Load this week's drop, sales and member discount from the shop's Worker.
+if (API) {
+  live = { drop: null, sales: {}, memberPercent: CFG.members?.percentOff ?? 0, photos: {} };
+  fetch(API + '/store', { cache: 'no-store' }).then(r => r.json()).then(d => {
+    if (d && !d.error) live = { drop: d.drop || null, sales: d.sales || {}, memberPercent: d.memberPercent ?? live.memberPercent, photos: d.photos || {} };
+  }).catch(() => {}).finally(renderAll);
+}
+// Coming back from Stripe checkout.
+const qs = new URLSearchParams(location.search);
+if (qs.get('checkout')) {
+  history.replaceState(null, '', location.pathname);
+  if (qs.get('checkout') === 'success') {
+    let p = null; try { p = JSON.parse(sessionStorage.getItem(KEY + 'pending')); sessionStorage.removeItem(KEY + 'pending') } catch {}
+    const id = '#' + (qs.get('order') || '').slice(-8).toUpperCase();
+    if (p) finishOrder({ id, key: qs.get('order'), lines: p.lines, total: p.total, spent: p.spent, fulfil: p.fulfil, practice: false });
+    else { cart = []; saveCart(); lastOrder = { id, fulfil }; cartView = 'done'; show('cart') }
+  } else show('cart');
+}
+
+// ---------- Light / dark switch ----------
+(function () {
+  const b = document.getElementById('theme-btn'), mq = matchMedia('(prefers-color-scheme: dark)');
+  const isDark = () => document.documentElement.dataset.theme ? document.documentElement.dataset.theme === 'dark' : mq.matches;
+  const sync = () => {
+    const d = isDark(); b.setAttribute('aria-label', d ? 'Switch to light mode' : 'Switch to dark mode'); b.title = d ? 'Light mode' : 'Dark mode';
+    const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = getComputedStyle(document.documentElement).getPropertyValue(d ? '--bg' : '--brand').trim() || m.content;
+  };
+  b.addEventListener('click', () => { const next = isDark() ? 'light' : 'dark'; document.documentElement.dataset.theme = next; try { localStorage.setItem('shop-theme', next) } catch (e) {} sync() });
+  mq.addEventListener?.('change', sync); sync();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Shop Owner</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#072448">
+<script>
+// Light / dark mode: follows the phone until the customer picks one, then remembers it.
+(function () { try { var t = localStorage.getItem('shop-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t } catch (e) {} })();
+</script>
+<style>
+:root{--brand:#072448;--bg:#f5f6f8;--panel:#fff;--panel-2:#eef0f4;--ink:#0e1a2b;--muted:#5f6b7a;--line:#e1e5ec;--bad:#c2462f;--ok:#2d7a4b}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0b1220;--panel:#121b2c;--panel-2:#19243a;--ink:#eef2f7;--muted:#9aa7b8;--line:#26324a;--bad:#ff8a73;--ok:#6fd19a}}
+:root[data-theme="dark"]{--bg:#0b1220;--panel:#121b2c;--panel-2:#19243a;--ink:#eef2f7;--muted:#9aa7b8;--line:#26324a;--bad:#ff8a73;--ok:#6fd19a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.wrap{max-width:560px;margin:0 auto;padding:16px 16px 40px;padding-top:calc(16px + env(safe-area-inset-top))}
+header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
+header h1{margin:0;font-size:22px}
+header small{display:block;color:var(--muted);font-size:13px}
+.out{border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:8px 12px;font-size:13px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;margin-top:16px}
+.card h2{margin:0 0 4px;font-size:17px}
+.card > p{margin:0 0 12px;color:var(--muted);font-size:13.5px}
+label{display:block;font-size:13px;font-weight:600;margin:12px 0 5px}
+input[type=text],input[type=password],input[type=number],input[type=date],select{width:100%;min-height:46px;border:1px solid var(--line);border-radius:11px;padding:10px 12px;background:var(--panel);font-size:16px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.check{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:14px;font-weight:500}
+.check input{width:20px;height:20px;accent-color:var(--brand)}
+.btns{display:flex;gap:10px;margin-top:16px}
+.primary{flex:1;min-height:48px;border:0;border-radius:12px;background:var(--brand);color:#fff;font-weight:800}
+.secondary{min-height:48px;border:1px solid var(--line);border-radius:12px;background:var(--panel);font-weight:700;padding:0 14px}
+.primary:disabled,.secondary:disabled{opacity:.55}
+.msg{min-height:20px;margin:10px 0 0;font-size:13.5px}
+.msg.ok{color:var(--ok)}.msg.bad{color:var(--bad)}
+.sale{display:grid;grid-template-columns:1fr 110px;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.sale b{display:block;font-size:14px;font-weight:600}
+.sale small{color:var(--muted);font-size:12.5px}
+.sale input{min-height:42px;text-align:right}
+.stat{display:flex;align-items:baseline;gap:8px;margin:4px 0 8px}
+.stat b{font-size:34px}
+.mlist{list-style:none;padding:0;margin:8px 0 0;font-size:13.5px;max-height:260px;overflow:auto}
+.mlist li{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
+.mlist li span:last-child{color:var(--muted);white-space:nowrap}
+.login{max-width:380px;margin:12vh auto 0}
+.photo{display:grid;grid-template-columns:64px 1fr auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.photo .ph{width:64px;height:64px;border-radius:12px;background:var(--panel-2);display:grid;place-items:center;overflow:hidden;font-size:11px;color:var(--muted);text-align:center}
+.photo .ph img{width:100%;height:100%;object-fit:cover}
+.photo b{display:block;font-size:14px;font-weight:600}
+.photo small{color:var(--muted);font-size:12.5px}
+.photo .acts{display:flex;flex-direction:column;gap:6px;align-items:stretch}
+.photo .acts label,.photo .acts button{margin:0;min-height:38px;display:grid;place-items:center;border:1px solid var(--line);border-radius:10px;background:var(--panel);font-size:13px;font-weight:700;padding:0 12px;cursor:pointer}
+.photo .acts label.up{background:var(--brand);border-color:var(--brand);color:#fff}
+.photo .acts input{position:absolute;width:1px;height:1px;opacity:0}
+.photo.busy{opacity:.55;pointer-events:none}
+.hidden{display:none}
+.preview{margin-top:10px;font-size:13px;color:var(--muted)}
+
+:root{color-scheme:light}
+:root[data-theme="dark"]{color-scheme:dark}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){color-scheme:dark}}
+.theme-btn{flex:none;width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:var(--panel);display:grid;place-items:center;padding:0}
+.theme-btn svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.theme-btn .sun{display:none}
+:root[data-theme="dark"] .theme-btn .sun{display:block}:root[data-theme="dark"] .theme-btn .moon{display:none}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .theme-btn .sun{display:block}:root:not([data-theme="light"]) .theme-btn .moon{display:none}}
+
+:root[data-theme="dark"] .primary,:root[data-theme="dark"] .photo .acts label.up{background:color-mix(in srgb,var(--brand) 70%,#fff);border-color:transparent}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .primary,:root:not([data-theme="light"]) .photo .acts label.up{background:color-mix(in srgb,var(--brand) 70%,#fff);border-color:transparent}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Login -->
+  <section id="login" class="login">
+    <header><div><h1>Shop Owner</h1><small id="login-store">Sign in to manage your shop</small></div></header>
+    <form class="card" id="login-form">
+      <label for="pw">Password</label>
+      <input id="pw" type="password" autocomplete="current-password" required>
+      <label class="check"><input type="checkbox" id="remember" checked> Keep me signed in on this phone</label>
+      <div class="btns"><button class="primary" type="submit">Sign in</button></div>
+      <p class="msg" id="login-msg" aria-live="polite"></p>
+    </form>
+  </section>
+
+  <!-- Dashboard -->
+  <section id="dash" class="hidden">
+    <header><div><h1 id="dash-title">Your shop</h1><small>Changes show in the app right away</small></div><div style="display:flex;gap:8px;align-items:center"><button class="theme-btn" id="theme-btn" type="button" aria-label="Switch to dark mode"><svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/></svg><svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button><button class="out" id="signout" type="button">Sign out</button></div></header>
+
+    <form class="card" id="drop-form">
+      <h2>This week's drop</h2>
+      <p>Feature one product at a special price. It shows at the top of the app.</p>
+      <label for="d-product">Product</label>
+      <select id="d-product"></select>
+      <div class="two">
+        <div><label for="d-price">Drop price ($)</label><input id="d-price" type="number" step="0.01" min="0" inputmode="decimal"></div>
+        <div><label for="d-ends">Ends on</label><input id="d-ends" type="date"></div>
+      </div>
+      <label for="d-title">Headline</label>
+      <input id="d-title" type="text" maxlength="80" placeholder="e.g. The Plum Hoodie is back">
+      <label for="d-note">Short note</label>
+      <input id="d-note" type="text" maxlength="160" placeholder="e.g. Limited run. When it's gone, it's gone.">
+      <label class="check"><input type="checkbox" id="d-members"> Members only (others see it but must join to get the price)</label>
+      <p class="preview" id="d-preview"></p>
+      <div class="btns"><button class="primary" type="submit">Save drop</button><button class="secondary" type="button" id="d-clear">Remove drop</button></div>
+      <p class="msg" id="d-msg" aria-live="polite"></p>
+    </form>
+
+    <form class="card" id="sale-form">
+      <h2>Sale prices</h2>
+      <p>Type a sale price to put an item on sale. Leave it empty for no sale.</p>
+      <div id="sale-list"></div>
+      <div class="btns"><button class="primary" type="submit">Save sale prices</button><button class="secondary" type="button" id="s-clear">End all sales</button></div>
+      <p class="msg" id="s-msg" aria-live="polite"></p>
+    </form>
+
+    <section class="card" id="photo-card">
+      <h2>Product photos</h2>
+      <p>One photo per product. Photos are shrunk automatically before upload (2 MB max). Square photos look best.</p>
+      <div id="photo-list"></div>
+      <p class="msg" id="p-msg" aria-live="polite"></p>
+    </section>
+
+    <form class="card" id="member-form">
+      <h2>Members</h2>
+      <div class="stat"><b id="m-count">–</b><span>members</span></div>
+      <label for="m-pct">Member discount on everything (%)</label>
+      <input id="m-pct" type="number" min="0" max="50" step="1" inputmode="numeric">
+      <div class="btns"><button class="primary" type="submit">Save discount</button><button class="secondary" type="button" id="m-csv">Download list</button></div>
+      <p class="msg" id="m-msg" aria-live="polite"></p>
+      <ul class="mlist" id="m-list"></ul>
+    </form>
+  </section>
+</div>
+
+<script>
+'use strict';
+// The address of this shop's Cloudflare Worker (same as "api" in shop.html).
+const SHOP_API = 'https://shop-demo.celyum909.workers.dev';
+
+const $ = s => document.querySelector(s);
+const PW_KEY = 'shop-owner-pw';
+const money = n => '$' + Number(n).toFixed(2);
+let pw = '', state = null, members = [];
+
+function getSaved() { try { return localStorage.getItem(PW_KEY) || sessionStorage.getItem(PW_KEY) || '' } catch { return '' } }
+function savePw(p, keep) { try { localStorage.removeItem(PW_KEY); sessionStorage.removeItem(PW_KEY); (keep ? localStorage : sessionStorage).setItem(PW_KEY, p) } catch {} }
+function clearPw() { try { localStorage.removeItem(PW_KEY); sessionStorage.removeItem(PW_KEY) } catch {} }
+function say(el, text, ok) { el.textContent = text; el.className = 'msg ' + (ok ? 'ok' : 'bad') }
+
+async function api(path, opts = {}) {
+  if (!SHOP_API) throw new Error('SHOP_API is empty in owner.html. Add your Worker address.');
+  let res;
+  try { res = await fetch(SHOP_API.replace(/\/+$/, '') + path, { ...opts, headers: { 'Content-Type': 'application/json', 'X-Admin-Password': pw, ...(opts.headers || {}) } }) }
+  catch { throw new Error("Can't reach the internet. Check your connection.") }
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401) { const e = new Error('Wrong password'); e.auth = true; throw e }
+  if (!res.ok) throw new Error(data.error || `Something went wrong (${res.status})`);
+  return data;
+}
+
+async function signIn(p, keep, quiet) {
+  pw = p;
+  try {
+    await api('/login', { method: 'POST' });
+    savePw(p, keep);
+    await loadAll();
+    $('#login').classList.add('hidden'); $('#dash').classList.remove('hidden');
+  } catch (e) {
+    pw = '';
+    if (quiet) { clearPw(); say($('#login-msg'), e.auth ? 'Your password changed. Please sign in again.' : e.message) }
+    else say($('#login-msg'), e.auth ? 'Incorrect password' : e.message);
+  }
+}
+$('#login-form').addEventListener('submit', e => { e.preventDefault(); say($('#login-msg'), 'Signing in…', true); signIn($('#pw').value, $('#remember').checked) });
+$('#signout').onclick = () => { clearPw(); pw = ''; location.reload() };
+
+async function loadAll() {
+  state = await api('/store', { method: 'GET', headers: { 'X-Admin-Password': '' } });
+  if (state.store?.name) { $('#dash-title').textContent = state.store.name; document.title = state.store.name + ' · Owner' }
+  if (state.store?.brandColor) document.documentElement.style.setProperty('--brand', state.store.brandColor);
+  fillDrop(); fillSales(); fillMembers(); fillPhotos();
+  try { const m = await api('/admin/members', { method: 'GET' }); members = m.members || []; renderMembers() } catch (e) { say($('#m-msg'), e.message) }
+}
+
+// ----- Drop -----
+function fillDrop() {
+  const sel = $('#d-product'), d = state.drop;
+  sel.innerHTML = '<option value="">Choose a product…</option>' + state.products.map(p => `<option value="${p.id}">${p.name} (${money(p.price)})</option>`).join('');
+  if (d) { sel.value = d.id; $('#d-price').value = d.price; $('#d-ends').value = d.ends || ''; $('#d-title').value = d.title || ''; $('#d-note').value = d.note || ''; $('#d-members').checked = !!d.membersOnly }
+  else { const next = new Date(Date.now() + 7 * 864e5); $('#d-ends').value = next.toISOString().slice(0, 10) }
+  previewDrop();
+}
+function previewDrop() {
+  const p = state.products.find(x => x.id === $('#d-product').value), price = Number($('#d-price').value);
+  $('#d-preview').textContent = p && price > 0 ? (price < p.price ? `${p.name}: ${money(price)} (regular ${money(p.price)}, saves ${Math.round((1 - price / p.price) * 100)}%)` : `Drop price must be below ${money(p.price)}`) : (state.drop ? '' : 'No drop is running right now.');
+}
+['#d-product', '#d-price'].forEach(s => $(s).addEventListener('input', previewDrop));
+$('#drop-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const msg = $('#d-msg'), drop = { id: $('#d-product').value, price: Number($('#d-price').value), ends: $('#d-ends').value, title: $('#d-title').value, note: $('#d-note').value, membersOnly: $('#d-members').checked };
+  if (!drop.id) return say(msg, 'Pick a product first.');
+  await save({ drop }, msg, 'Drop saved. It is live in the app.');
+});
+$('#d-clear').onclick = async () => { await save({ drop: null }, $('#d-msg'), 'Drop removed.'); fillDrop() };
+
+// ----- Sales -----
+function fillSales() {
+  $('#sale-list').innerHTML = state.products.map(p => `<div class="sale"><div><b>${p.name}</b><small>Regular ${money(p.price)}</small></div><input type="number" step="0.01" min="0" inputmode="decimal" data-id="${p.id}" aria-label="Sale price for ${p.name}" placeholder="—" value="${state.sales?.[p.id] ?? ''}"></div>`).join('');
+}
+$('#sale-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const sales = {};
+  document.querySelectorAll('#sale-list input').forEach(i => { if (i.value !== '' && Number(i.value) > 0) sales[i.dataset.id] = Number(i.value) });
+  await save({ sales }, $('#s-msg'), `Saved. ${Object.keys(sales).length || 'No'} item${Object.keys(sales).length === 1 ? '' : 's'} on sale.`);
+});
+$('#s-clear').onclick = async () => { await save({ sales: {} }, $('#s-msg'), 'All sales ended.'); fillSales() };
+
+// ----- Members -----
+function fillMembers() { $('#m-pct').value = state.memberPercent ?? 0 }
+function renderMembers() {
+  $('#m-count').textContent = members.length;
+  $('#m-list').innerHTML = members.slice(0, 100).map(m => `<li><span>${esc(m.name)} · ${esc(m.email)}</span><span>${new Date(m.since).toLocaleDateString()}</span></li>`).join('');
+}
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+$('#member-form').addEventListener('submit', async e => { e.preventDefault(); await save({ memberPercent: Number($('#m-pct').value) }, $('#m-msg'), 'Member discount saved.') });
+$('#m-csv').onclick = () => {
+  const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const csv = 'Name,Email,Phone,Joined\n' + members.map(m => [m.name, m.email, m.phone, new Date(m.since).toISOString().slice(0, 10)].map(q).join(',')).join('\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'members.csv'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+};
+
+// ----- Photos -----
+const API_BASE = () => SHOP_API.replace(/\/+$/, '');
+function fillPhotos() {
+  const ph = state.photos || {};
+  $('#photo-list').innerHTML = state.products.map(p => `<div class="photo" data-id="${esc(p.id)}">
+    <div class="ph">${ph[p.id] ? `<img src="${API_BASE()}/photo/${encodeURIComponent(p.id)}?v=${ph[p.id]}" alt="">` : 'No photo'}</div>
+    <div><b>${esc(p.name)}</b><small>${ph[p.id] ? 'Photo added ' + new Date(ph[p.id]).toLocaleDateString() : 'Using the drawing'}</small></div>
+    <div class="acts"><label class="up">${ph[p.id] ? 'Change' : 'Add photo'}<input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/*"></label>${ph[p.id] ? '<button type="button" class="rm">Remove</button>' : ''}</div></div>`).join('');
+}
+// Shrink to max 1200 px on the long side as JPEG, lowering quality until it fits.
+async function shrink(file) {
+  const img = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => bad(new Error("That file isn't a photo this phone can read. Try a JPG or PNG.")); i.src = URL.createObjectURL(file) });
+  const scale = Math.min(1, 1200 / Math.max(img.naturalWidth, img.naturalHeight));
+  const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * scale); c.height = Math.round(img.naturalHeight * scale);
+  const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+  URL.revokeObjectURL(img.src);
+  for (const q of [0.85, 0.75, 0.6, 0.45]) {
+    const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', q));
+    if (blob && blob.size <= 1.9 * 1024 * 1024) return blob;
+  }
+  throw new Error('That photo is too large even after shrinking.');
+}
+async function sendPhoto(id, fd) {
+  let res;
+  try { res = await fetch(API_BASE() + '/admin/photo', { method: 'POST', headers: { 'X-Admin-Password': pw }, body: fd }) }
+  catch { throw new Error("Can't reach the internet. Check your connection.") }
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401) { const e = new Error('Wrong password'); e.auth = true; throw e }
+  if (!res.ok) throw new Error(data.error || `Upload failed (${res.status})`);
+  state.photos = data.photos; fillPhotos();
+}
+$('#photo-list').addEventListener('change', async e => {
+  const input = e.target.closest('input[type=file]'); if (!input || !input.files[0]) return;
+  const row = input.closest('.photo'), id = row.dataset.id, msg = $('#p-msg'), name = row.querySelector('b').textContent;
+  row.classList.add('busy'); say(msg, `Uploading ${name}…`, true);
+  try {
+    const blob = await shrink(input.files[0]);
+    const fd = new FormData(); fd.append('id', id); fd.append('image', blob, id + '.jpg');
+    await sendPhoto(id, fd); say(msg, `${name}: photo saved (${Math.round(blob.size / 1024)} KB). It's live in the app.`, true);
+  } catch (err) { if (err.auth) { clearPw(); location.reload() } else { say(msg, err.message); row.classList.remove('busy') } }
+});
+$('#photo-list').addEventListener('click', async e => {
+  const b = e.target.closest('.rm'); if (!b) return;
+  const row = b.closest('.photo'), name = row.querySelector('b').textContent, msg = $('#p-msg');
+  if (!b.dataset.arm) { b.dataset.arm = '1'; b.textContent = 'Sure?'; setTimeout(() => { if (b.isConnected) { delete b.dataset.arm; b.textContent = 'Remove' } }, 3500); return }
+  row.classList.add('busy');
+  try { const fd = new FormData(); fd.append('id', row.dataset.id); fd.append('remove', '1'); await sendPhoto(row.dataset.id, fd); say(msg, `${name}: photo removed.`, true) }
+  catch (err) { if (err.auth) { clearPw(); location.reload() } else { say(msg, err.message); row.classList.remove('busy') } }
+});
+
+async function save(body, msg, okText) {
+  const btns = msg.closest('form').querySelectorAll('button'); btns.forEach(b => b.disabled = true); say(msg, 'Saving…', true);
+  try { const r = await api('/admin/settings', { method: 'POST', body: JSON.stringify(body) }); state = { ...state, ...r.settings }; say(msg, okText, true); previewDrop() }
+  catch (e) { if (e.auth) { clearPw(); location.reload() } else say(msg, e.message) }
+  finally { btns.forEach(b => b.disabled = false) }
+}
+
+// Start: try a remembered password.
+const saved = getSaved();
+if (saved) signIn(saved, !!(() => { try { return localStorage.getItem(PW_KEY) } catch {} })(), true);
+else if (!SHOP_API) say($('#login-msg'), 'Setup needed: add your Worker address to SHOP_API in owner.html.');
+
+// ---------- Light / dark switch ----------
+(function () {
+  const b = document.getElementById('theme-btn'), mq = matchMedia('(prefers-color-scheme: dark)');
+  const isDark = () => document.documentElement.dataset.theme ? document.documentElement.dataset.theme === 'dark' : mq.matches;
+  const sync = () => {
+    const d = isDark(); b.setAttribute('aria-label', d ? 'Switch to light mode' : 'Switch to dark mode'); b.title = d ? 'Light mode' : 'Dark mode';
+    const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = getComputedStyle(document.documentElement).getPropertyValue(d ? '--bg' : '--brand').trim() || m.content;
+  };
+  b.addEventListener('click', () => { const next = isDark() ? 'light' : 'dark'; document.documentElement.dataset.theme = next; try { localStorage.setItem('shop-theme', next) } catch (e) {} sync() });
+  mq.addEventListener?.('change', sync); sync();
+})();
+</script>
+</body>
+</html>
