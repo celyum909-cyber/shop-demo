@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Privacy policy</title>
+<!--
+  PRIVACY POLICY TEMPLATE
+  - Shop name, email, phone and address are filled in from the settings block in shop.html,
+    so there's nothing to retype. (If the shop page has a different name, change SHOP_PAGE below.)
+  - Set "privacy": { "effective": "YYYY-MM-DD", "reviewed": true } in shop.html once a lawyer has
+    reviewed this page. Until then a DRAFT notice shows at the top.
+  - This is a plain-English starting point, not legal advice.
+-->
+<style>
+:root{--brand:#072448;--ink:#14202e;--muted:#5b6675;--line:#e1e5ea;--bg:#f5f6f8;--panel:#fff;--warn:#fff4e0;--warn-line:#f8a94b;--link:#0b5394}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--ink:#e8edf3;--muted:#9aa6b4;--line:#283445;--bg:#0d1520;--panel:#131e2c;--warn:#2a2111;--link:#7fc4ff}}
+:root[data-theme="dark"]{--ink:#e8edf3;--muted:#9aa6b4;--line:#283445;--bg:#0d1520;--panel:#131e2c;--warn:#2a2111;--link:#7fc4ff}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 Inter,"Segoe UI",system-ui,-apple-system,Arial,sans-serif}
+main{max-width:720px;margin:0 auto;padding:20px 16px 60px}
+.back{display:inline-block;margin-bottom:14px;color:var(--link);font-weight:600;text-decoration:none}
+.draft{background:var(--warn);border-left:4px solid var(--warn-line);border-radius:0 10px 10px 0;padding:12px 14px;margin:0 0 18px;font-size:14.5px}
+h1{font-size:30px;line-height:1.15;margin:0 0 6px}
+.meta{color:var(--muted);font-size:14px;margin:0 0 18px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin:0 0 22px}
+.card ul{margin:0;padding-left:20px}
+h2{font-size:19px;margin:26px 0 8px}
+h3{font-size:16px;margin:14px 0 4px}
+p{margin:0 0 10px}
+ul{margin:0 0 10px;padding-left:22px}
+li{margin-bottom:5px}
+a{color:var(--link)}
+.contact{list-style:none;padding:0}
+.contact li{padding:6px 0;border-bottom:1px solid var(--line)}
+.contact b{display:inline-block;min-width:80px}
+@media print{.back,.draft{display:none}body{background:#fff}}
+</style>
+</head>
+<body>
+<main>
+  <a class="back" id="back" href="shop.html">← Back to the shop</a>
+  <div class="draft" id="draft" hidden><b>Template draft.</b> This policy hasn't been reviewed by a lawyer yet. Have it checked for your state and business before relying on it. This is not legal advice.</div>
+
+  <h1>Privacy policy</h1>
+  <p class="meta"><span data-f="name">[Shop name]</span> · Effective <span data-f="effective">[date]</span></p>
+
+  <div class="card">
+    <b>The short version</b>
+    <ul>
+      <li>We collect only what we need to run your orders and our member deals.</li>
+      <li>Card payments are handled by Stripe. We never see or store your full card number.</li>
+      <li>We don't sell your information or use advertising trackers.</li>
+      <li>Want your info deleted, or no more deals? <a href="#contact">Contact us</a> and we'll take care of it.</li>
+    </ul>
+  </div>
+
+  <p>This policy explains what <span data-f="name">[Shop name]</span> ("we", "us") collects when you use our shop app, why, and the choices you have.</p>
+
+  <h2>What we collect</h2>
+  <h3>When you join as a member</h3>
+  <ul>
+    <li>Your first name and email address</li>
+    <li>Your phone number, if you choose to give it</li>
+    <li>The date you joined</li>
+  </ul>
+  <h3>When you place an order</h3>
+  <ul>
+    <li>What you bought, the prices, and whether it's for pickup or shipping</li>
+    <li>What you type on the secure Stripe payment page: your name, email, phone number, and your shipping address if we're shipping to you</li>
+    <li>Your payment card details go straight to Stripe. We can see the card type and last four digits, but never the full number.</li>
+  </ul>
+  <h3>Stored only on your phone</h3>
+  <p>Your cart, your rewards card and order history, whether you're a member, and your light or dark setting are saved in your browser on your device. They aren't sent to us, and clearing your browser data removes them.</p>
+  <h3>Basic counts and technical information</h3>
+  <p>We count how many checkouts start each day, as a single number that doesn't identify anyone. Like any website, the services that host our app may record technical details such as your IP address and browser type to deliver pages and keep them secure.</p>
+  <p>We don't use advertising trackers, analytics cookies or social media pixels.</p>
+
+  <h2>How we use it</h2>
+  <ul>
+    <li>To take payment for, prepare, and hand over or ship your order</li>
+    <li>To contact you about your order</li>
+    <li>To give members their member prices</li>
+    <li>To send members news about drops and deals, if you joined (you can stop these at any time)</li>
+    <li>To prevent fraud and keep the records the law requires, such as for taxes</li>
+  </ul>
+
+  <h2>Who we share it with</h2>
+  <p>We share information only with the companies that help us run the app, and only so they can do that job:</p>
+  <ul>
+    <li><b>Stripe</b> processes payments and can email your receipt. <a href="https://stripe.com/privacy" rel="noopener">Stripe's privacy policy</a></li>
+    <li><b>Cloudflare</b> runs the part of the app that handles checkout and stores our member list. <a href="https://www.cloudflare.com/privacypolicy/" rel="noopener">Cloudflare's privacy policy</a></li>
+    <li><b data-f="host">Our website host</b> delivers the app's pages to your phone.</li>
+    <li><b>Shipping carriers</b> get your name and address when we ship an order to you.</li>
+  </ul>
+  <p>We may also share information if the law requires it. We <b>never sell or rent</b> your information.</p>
+
+  <h2>Deals by email or text, and how to stop them</h2>
+  <p>If you join as a member, we may send you news about drops and deals by email, or by text if you gave us your phone number. To stop them:</p>
+  <ul>
+    <li>Reply <b>STOP</b> to any text, or use the unsubscribe instructions in any email</li>
+    <li>Or just <a href="#contact">contact us</a></li>
+  </ul>
+  <p>We'll stop within 10 business days. Messages about an order you placed may still be sent.</p>
+
+  <h2>Deleting your information</h2>
+  <p><a href="#contact">Contact us</a> from the email you joined with and ask us to delete your information. We'll remove you from our member list and confirm when it's done.</p>
+  <p>The "Remove membership from this phone" button in the app only clears your phone. It doesn't delete you from our list, so ask us for that. We may need to keep records of past orders for as long as tax and accounting rules require.</p>
+  <p>Depending on where you live, you may have other rights over your information, such as asking for a copy of it or correcting it. Contact us and we'll help.</p>
+
+  <h2>How long we keep it</h2>
+  <ul>
+    <li><b>Member details:</b> until you ask us to delete them, or we end our member program</li>
+    <li><b>Order records:</b> as long as the law requires for taxes and accounting</li>
+    <li><b>Your rewards card:</b> on your phone until you clear your browser data</li>
+  </ul>
+
+  <h2>Keeping it safe</h2>
+  <p>The app uses a secure (HTTPS) connection, payments go through Stripe, and only we can open our member list, with a password. No system is perfect, though. If a breach ever affects your information, we'll tell you as the law requires.</p>
+
+  <h2>Children</h2>
+  <p>Our app isn't meant for children under 13, and we don't knowingly collect their information. If you think a child has given us their details, contact us and we'll delete them.</p>
+
+  <h2>Changes to this policy</h2>
+  <p>If we change this policy, we'll update it here and change the effective date at the top.</p>
+
+  <h2 id="contact">Contact us</h2>
+  <ul class="contact">
+    <li><b>Shop</b><span data-f="name">[Shop name]</span></li>
+    <li data-row="email"><b>Email</b><a data-f="email" href="#">[email]</a></li>
+    <li data-row="phone"><b>Phone</b><a data-f="phone" href="#">[phone]</a></li>
+    <li data-row="address"><b>Address</b><span data-f="address">[address]</span></li>
+  </ul>
+</main>
+<script>
+const SHOP_PAGE = 'shop.html';
+(function () { try { const t = localStorage.getItem('shop-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t } catch (e) {} })();
+const set = (f, v) => document.querySelectorAll(`[data-f="${f}"]`).forEach(el => { el.textContent = v });
+fetch(SHOP_PAGE, { cache: 'no-cache' }).then(r => r.text()).then(html => {
+  const m = html.match(/<script[^>]*id=["']shop-config["'][^>]*>([\s\S]*?)<\/script>/i);
+  const cfg = JSON.parse(m[1]), S = cfg.store || {}, P = cfg.privacy || {};
+  document.title = `Privacy policy · ${S.name || 'Shop'}`;
+  if (S.name) set('name', S.name);
+  if (S.colors?.brand || S.brandColor) document.documentElement.style.setProperty('--brand', S.colors?.brand || S.brandColor);
+  set('effective', P.effective ? new Date(P.effective + 'T12:00:00').toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : '[date]');
+  if (P.host) set('host', P.host);
+  document.getElementById('draft').hidden = !!P.reviewed;
+  const row = (k, v, href) => { const li = document.querySelector(`[data-row="${k}"]`); if (!v) { li.remove(); return } set(k, v); if (href) li.querySelector('a').href = href };
+  row('email', S.email, S.email && 'mailto:' + S.email);
+  row('phone', S.phone, S.phone && 'tel:' + S.phone.replace(/[^\d+]/g, ''));
+  row('address', S.address);
+}).catch(() => { document.getElementById('draft').hidden = false });
+</script>
+</body>
+</html>

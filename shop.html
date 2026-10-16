@@ -26,6 +26,7 @@
     "email": "hello@yourshop.com",
     "shareUrl": "https://celyum909-cyber.github.io/shop-demo/"
   },
+  "privacy": { "page": "privacy.html", "effective": "2026-10-16", "host": "GitHub Pages", "reviewed": false },
   "api": "https://shop-demo.celyum909.workers.dev",
   "shipping": { "enabled": true, "flat": 5.99 },
   "rewards": { "enabled": true, "punchValue": 20, "punches": 10, "reward": "free cap" },
@@ -544,7 +545,7 @@ function renderCart() {
     <div class="row total"><span>Total</span><span>${money(t.total)}</span></div>
     ${!isMember() && CFG.members?.enabled && nonMember.sub < t.sub ? `<div class="nudge">Members would pay <b>${money(nonMember.total)}</b> for this cart. <button type="button" data-go="members">Join free</button></div>` : ''}
     <button class="primary" type="button" id="checkout" style="width:100%;margin-top:14px">Checkout · ${money(t.total)}</button>
-    <p class="fine" id="checkout-note">${API ? 'Secure payment by Stripe.' : 'Practice mode: no card is charged.'}</p>
+    <p class="fine" id="checkout-note">${API ? 'Secure payment by Stripe.' : 'Practice mode: no card is charged.'} ${privacyLink()}</p>
   </div>`;
 }
 $('#view-cart').addEventListener('click', async e => {
@@ -651,7 +652,7 @@ function renderMembers() {
     <label for="j-email">Email</label><input id="j-email" type="email" autocomplete="email" inputmode="email" required maxlength="120">
     <label for="j-phone">Phone <span style="color:var(--muted);font-weight:400">(optional)</span></label><input id="j-phone" type="tel" autocomplete="tel" maxlength="30">
     <button class="primary join-btn" type="submit" style="width:100%;margin-top:16px">Join free</button><p class="hint" id="join-hint" aria-live="polite"></p>
-    <p class="fine">We only use this for ${esc(S.name)} deals and your orders. Leave any time.</p></form>${info}${shareBlock()}`;
+    <p class="fine">We only use this for ${esc(S.name)} deals and your orders. Leave any time. ${privacyLink()}</p></form>${info}${shareBlock()}`;
   }
 }
 $('#view-members').addEventListener('submit', async e => {
@@ -703,6 +704,7 @@ $('#view-members').addEventListener('click', async e => {
 });
 
 // ---------- Help (how to use the app, filled in from the settings block) ----------
+const privacyLink = () => CFG.privacy?.page ? `<a href="${esc(CFG.privacy.page)}" style="color:inherit">Privacy policy</a>` : '';
 function renderHelp() {
   const M = CFG.members || {}, ship = CFG.shipping || {}, pct = Number(live.memberPercent) || 0;
   const go = (view, label) => `<button type="button" class="help-go" data-go="${view}">${label}</button>`;
@@ -720,7 +722,7 @@ function renderHelp() {
     q('Put the app on your home screen', `<ul><li><b>iPhone (Safari):</b> tap the Share button, then <b>Add to Home Screen</b>.</li><li><b>Android (Chrome):</b> tap the ⋮ menu, then <b>Add to Home screen</b> or <b>Install app</b>.</li></ul><p>It opens like an app, with no app store needed.</p>`),
   ].join('');
   const contact = [S.phone ? `<li><b>Phone</b><a href="tel:${esc(S.phone.replace(/[^\d+]/g, ''))}">${esc(S.phone)}</a></li>` : '', S.email ? `<li><b>Email</b><a href="mailto:${esc(S.email)}">${esc(S.email)}</a></li>` : '', S.address ? `<li><b>Address</b>${esc(S.address)}</li>` : '', S.hours ? `<li><b>Hours</b>${esc(S.hours)}</li>` : ''].join('');
-  $('#view-help').innerHTML = `<h2 class="section" style="margin-top:4px">How to use the app</h2><p class="help-intro">Quick answers about ordering, membership and rewards at ${esc(S.name)}.</p>${items}${contact ? `<h2 class="section">Still have a question?</h2><ul class="info">${contact}</ul>` : ''}`;
+  $('#view-help').innerHTML = `<h2 class="section" style="margin-top:4px">How to use the app</h2><p class="help-intro">Quick answers about ordering, membership and rewards at ${esc(S.name)}.</p>${items}${contact ? `<h2 class="section">Still have a question?</h2><ul class="info">${contact}</ul>` : ''}${CFG.privacy?.page ? `<p class="fine" style="margin-top:16px"><a href="${esc(CFG.privacy.page)}">Privacy policy</a>: what we collect and how to have it deleted.</p>` : ''}`;
 }
 
 // ---------- Navigation, toast ----------

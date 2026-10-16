@@ -47,6 +47,9 @@ input[type=text],input[type=password],input[type=number],input[type=date],select
 .mlist{list-style:none;padding:0;margin:8px 0 0;font-size:13.5px;max-height:260px;overflow:auto}
 .mlist li{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
 .mlist li span:last-child{color:var(--muted);white-space:nowrap}
+.mlist li .who{flex:1;min-width:0;overflow-wrap:anywhere}
+.mlist li .mrm{border:1px solid var(--line);background:none;color:var(--muted);border-radius:8px;padding:3px 9px;font-size:12.5px;font-weight:700;margin-left:8px}
+.mlist li .mrm.arm{border-color:#c0392b;color:#c0392b}
 .login{max-width:380px;margin:12vh auto 0}
 .photo{display:grid;grid-template-columns:64px 1fr auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
 .photo .ph{width:64px;height:64px;border-radius:12px;background:var(--panel-2);display:grid;place-items:center;overflow:hidden;font-size:11px;color:var(--muted);text-align:center}
@@ -267,8 +270,16 @@ $('#s-clear').onclick = async () => { await save({ sales: {} }, $('#s-msg'), 'Al
 function fillMembers() { $('#m-pct').value = state.memberPercent ?? 0 }
 function renderMembers() {
   $('#m-count').textContent = members.length;
-  $('#m-list').innerHTML = members.slice(0, 100).map(m => `<li><span>${esc(m.name)} · ${esc(m.email)}</span><span>${new Date(m.since).toLocaleDateString()}</span></li>`).join('');
+  $('#m-list').innerHTML = members.slice(0, 100).map(m => `<li><span class="who">${esc(m.name)} · ${esc(m.email)}</span><span>${new Date(m.since).toLocaleDateString()}<button type="button" class="mrm" data-email="${esc(m.email)}" aria-label="Remove ${esc(m.name)}">Remove</button></span></li>`).join('');
 }
+// Remove a member (e.g. they asked to have their info deleted). Tap twice to confirm.
+$('#m-list').addEventListener('click', async e => {
+  const b = e.target.closest('.mrm'); if (!b) return;
+  if (!b.classList.contains('arm')) { b.classList.add('arm'); b.textContent = 'Sure?'; setTimeout(() => { if (b.isConnected) { b.classList.remove('arm'); b.textContent = 'Remove' } }, 3500); return }
+  b.disabled = true;
+  try { await api('/admin/member/remove', { method: 'POST', body: JSON.stringify({ email: b.dataset.email }) }); members = members.filter(m => m.email !== b.dataset.email); renderMembers(); say($('#m-msg'), 'Member removed.', true) }
+  catch (err) { b.disabled = false; say($('#m-msg'), err.message) }
+});
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 $('#member-form').addEventListener('submit', async e => { e.preventDefault(); await save({ memberPercent: Number($('#m-pct').value) }, $('#m-msg'), 'Member discount saved.') });
 $('#m-csv').onclick = () => {
