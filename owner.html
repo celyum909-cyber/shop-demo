@@ -344,7 +344,8 @@ function renderStats() {
   const d = statsData, c = d.currency, body = $('#sales-body');
   $('#sales-title').innerHTML = 'Sales' + (d.testMode ? '<span class="test-pill" title="Showing Stripe test orders">TEST</span>' : '');
   // Only show a rate once the counter has seen at least as many checkouts as there are orders (it starts counting when the Worker is installed).
-  const conv = d.started && d.started >= d.orders ? Math.round(d.orders / d.started * 100) : null;
+  const fin = d.finished ?? d.orders;
+  const conv = d.started && d.started >= fin ? Math.round(fin / d.started * 100) : null;
   body.innerHTML = `
     <div class="tiles">
       <div class="tile"><small>Revenue</small><b>${fmtMoney(d.revenue, c)}</b><span>last ${d.days} days</span></div>
