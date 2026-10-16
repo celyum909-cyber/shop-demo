@@ -288,6 +288,17 @@ form.join input{width:100%;min-height:46px;border:1px solid var(--line);border-r
 .share p{margin:0 0 4px;font-size:14px;color:var(--muted)}
 .share .share-url{font-weight:700;color:var(--ink);word-break:break-all;margin-bottom:12px}
 .share .primary{width:100%}
+.help-intro{font-size:15px;color:var(--muted);margin:4px 0 14px}
+.faq{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);margin-bottom:10px;overflow:hidden}
+.faq summary{list-style:none;cursor:pointer;padding:15px 44px 15px 16px;font-weight:700;font-size:16px;position:relative}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"";position:absolute;right:18px;top:50%;width:9px;height:9px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:translateY(-70%) rotate(45deg);transition:transform .2s}
+.faq[open] summary::after{transform:translateY(-30%) rotate(-135deg)}
+.faq .body{padding:0 16px 14px;font-size:14.5px;line-height:1.55}
+.faq .body p{margin:0 0 8px}
+.faq .body ol,.faq .body ul{margin:0 0 8px;padding-left:20px}
+.faq .body li{margin-bottom:4px}
+.help-go{border:0;background:none;padding:0;color:var(--brand-text);font-weight:700;text-decoration:underline;font:inherit}
 </style>
 </head>
 <body>
@@ -311,6 +322,7 @@ form.join input{width:100%;min-height:46px;border:1px solid var(--line);border-r
     <section class="view" id="view-rewards" aria-label="Rewards"></section>
     <section class="view" id="view-members" aria-label="Members"></section>
     <section class="view" id="view-cart" aria-label="Cart"></section>
+    <section class="view" id="view-help" aria-label="Help"></section>
   </main>
 </div>
 
@@ -320,6 +332,7 @@ form.join input{width:100%;min-height:46px;border:1px solid var(--line);border-r
     <button class="tab" data-view="rewards" id="tab-rewards"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2.5"/><circle cx="8" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="16" cy="12" r="1.5"/></svg>Rewards<span class="dot" hidden></span></button>
     <button class="tab" data-view="members" id="tab-members"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9L12 3Z"/></svg>Members</button>
     <button class="tab" data-view="cart" id="tab-cart"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8h12l-1 12H7L6 8Z"/><path d="M9 10V7a3 3 0 0 1 6 0v3"/></svg>Cart<span class="count" hidden></span></button>
+    <button class="tab" data-view="help" id="tab-help"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.8"/><path d="M12 17.2v.1"/></svg>Help</button>
   </div>
 </nav>
 
@@ -689,6 +702,27 @@ $('#view-members').addEventListener('click', async e => {
   catch { toast(url, false) }
 });
 
+// ---------- Help (how to use the app, filled in from the settings block) ----------
+function renderHelp() {
+  const M = CFG.members || {}, ship = CFG.shipping || {}, pct = Number(live.memberPercent) || 0;
+  const go = (view, label) => `<button type="button" class="help-go" data-go="${view}">${label}</button>`;
+  const q = (title, body, open) => `<details class="faq"${open ? ' open' : ''}><summary>${title}</summary><div class="body">${body}</div></details>`;
+  const items = [
+    q('Placing an order', `<ol><li>Tap any product in the ${go('shop', 'Shop')} tab.</li><li>Pick a size and how many you want, then tap <b>Add to cart</b>.</li><li>Open the ${go('cart', 'Cart')} tab, check everything, then tap <b>Checkout</b>.</li><li>Pay on the secure Stripe page. Your card details go to Stripe, never to the shop.</li><li>You come back to the app and see <b>Order placed</b> with your order number.</li></ol><p>Change amounts or remove items in the cart with the − and + buttons.</p>`, true),
+    q('Sizes', `<p>Each product shows the sizes it comes in. Tap one before adding to your cart. Items like stickers or mugs are one size, so there's nothing to pick.</p><p>Not sure about fit? ${S.phone || S.email ? 'Ask us before you order (details at the bottom).' : 'Ask us in store before you order.'}</p>`),
+    ship.enabled
+      ? q('Pickup or shipping', `<p>In the cart, choose how you want your order:</p><ul><li><b>Pick up in store</b>: free.${S.address ? ` Collect it at ${esc(S.address)}.` : ''}${S.hours ? ` Hours: ${esc(S.hours)}.` : ''}</li><li><b>Ship to me</b>: ${money(ship.flat)} flat, anywhere in the US. You type your address on the payment page.</li></ul>`)
+      : q('Picking up your order', `<p>Orders are picked up in store.${S.address ? ` Find us at ${esc(S.address)}.` : ''}${S.hours ? ` Hours: ${esc(S.hours)}.` : ''}</p>`),
+    q('Deals and prices', `<p>Look out for <b>this week's drop</b> at the top of the shop, and items marked on sale.${M.enabled ? ' Members also get their own prices.' : ''}</p><p>You always pay the <b>single lowest price</b> you qualify for. Deals don't stack, and the cart always shows what you'll pay before you check out.</p>`),
+    M.enabled ? q('Becoming a member', `<ol><li>Open the ${go('members', 'Members')} tab.</li><li>Enter your first name and email, then tap <b>Join free</b>.</li><li>Prices drop straight away${pct ? `: <b>${pct}% off</b> everything` : ''}, applied for you at checkout.</li></ol><p>New phone? Join again with the <b>same email</b> and your member prices come back. To sign out on this phone, tap <b>Remove membership from this phone</b> at the bottom of the Members tab.</p>`) : '',
+    R.enabled ? q('Rewards card', `<ul><li>Every <b>${whole(R.punchValue)}</b> you spend earns a punch (after discounts, not counting shipping).</li><li>Fill all <b>${R.punches}</b> punches for a <b>${esc(R.reward)}</b>.</li><li>Only paid orders count. Your card is in the ${go('rewards', 'Rewards')} tab.</li><li>When it's full, show that screen at the counter to claim your reward.</li></ul><p>The card is saved on this phone, so use the same phone and browser each time. Clearing your browser data resets it.</p>`) : '',
+    q('Share the shop with friends', `<p>At the bottom of the ${go('members', 'Members')} tab there's a QR code. A friend can point their phone camera at it to open the shop. Or tap <b>Share link</b> to send it in a text.</p>`),
+    q('Put the app on your home screen', `<ul><li><b>iPhone (Safari):</b> tap the Share button, then <b>Add to Home Screen</b>.</li><li><b>Android (Chrome):</b> tap the ⋮ menu, then <b>Add to Home screen</b> or <b>Install app</b>.</li></ul><p>It opens like an app, with no app store needed.</p>`),
+  ].join('');
+  const contact = [S.phone ? `<li><b>Phone</b><a href="tel:${esc(S.phone.replace(/[^\d+]/g, ''))}">${esc(S.phone)}</a></li>` : '', S.email ? `<li><b>Email</b><a href="mailto:${esc(S.email)}">${esc(S.email)}</a></li>` : '', S.address ? `<li><b>Address</b>${esc(S.address)}</li>` : '', S.hours ? `<li><b>Hours</b>${esc(S.hours)}</li>` : ''].join('');
+  $('#view-help').innerHTML = `<h2 class="section" style="margin-top:4px">How to use the app</h2><p class="help-intro">Quick answers about ordering, membership and rewards at ${esc(S.name)}.</p>${items}${contact ? `<h2 class="section">Still have a question?</h2><ul class="info">${contact}</ul>` : ''}`;
+}
+
 // ---------- Navigation, toast ----------
 function show(name) {
   if (sheet.open) sheet.close();
@@ -696,7 +730,7 @@ function show(name) {
   if (name !== 'cart' && cartView === 'done') { cartView = 'cart' }
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
   document.querySelectorAll('.tab').forEach(t => t.dataset.view === name ? t.setAttribute('aria-current', 'page') : t.removeAttribute('aria-current'));
-  ({ shop: renderShop, rewards: renderRewards, members: renderMembers, cart: renderCart })[name]?.();
+  ({ shop: renderShop, rewards: renderRewards, members: renderMembers, cart: renderCart, help: renderHelp })[name]?.();
   window.scrollTo({ top: 0 });
 }
 document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => show(t.dataset.view)));
