@@ -17,6 +17,7 @@ The app works on its own in **practice mode** (no Worker, no card charged), so y
 Open `shop.html` in a text editor. Everything you change is in the **SHOP SETTINGS** block at the top. Nothing below it needs editing.
 
 - **store**: name, tagline, 2-letter `initials`, `brandColor` (any color code, e.g. `#b5432f`), address, hours, phone, email. To use a real logo, put its web address in `logo`.
+  - `shareUrl`: the address the **Share the shop** QR code and button point to (Members tab), e.g. `https://yourname.github.io/abc-shop/`. Leave it empty and it uses whatever address the customer opened the shop from.
 - **products**: one line per product. Give each one:
   - an `id`: short and unique, no spaces, e.g. `tee-black`
   - a `name`, `category` and `price`
@@ -60,16 +61,24 @@ Upload both again.
 ## How prices work
 The customer always pays the **single lowest price they qualify for**: the regular price, the sale price, this week's drop, or the member price. Deals don't stack. The Worker works out the price itself at checkout, so nobody can change what they pay. A member discount only applies if the email is really on the member list.
 
+## Privacy policy
+`privacy.html` is a plain-English privacy policy that fills in the shop's name, email, phone and address from `shop.html` by itself. It's linked from the app's Help tab, the join form and the cart.
+- In `shop.html`, set `"privacy"`: `effective` to the date it takes effect (e.g. `"2026-11-01"`) and `host` to where the pages are hosted (e.g. `"GitHub Pages"`).
+- It shows a **Template draft** notice until you set `"reviewed": true`. **Have a lawyer review it for the shop's state and business first.** It isn't legal advice.
+- Upload `privacy.html` next to `shop.html`. If the shop page is renamed (e.g. to `index.html`), change `SHOP_PAGE` at the bottom of `privacy.html` to match.
+- If the shop texts its members deals, have the lawyer check the texting rules too. They usually need clear permission from each person.
+
 ## Owner tips
 - **Weekly drop:** pick a product, a price below regular, and an end date. It disappears on its own after that date. "Members only" means everyone sees it but only members get the price, which is a good reason to join.
 - **Sales:** type a sale price next to any item. Leave the box empty for no sale.
 - **Photos:** tap **Add photo** next to a product and pick one from the phone or take one. It's shrunk to about 1200 pixels automatically, so uploads are quick. Each product gets one photo, and a new one replaces the old. JPG, PNG or WebP only, 2 MB max after shrinking. Square photos look best.
-- **Members:** see who joined, change the % off, and download the list as a spreadsheet for emails or texts.
+- **Members:** see who joined, change the % off, and download the list as a spreadsheet for emails or texts. Tap **Remove** (then **Sure?**) to delete someone who asks, as the privacy policy promises.
 - **Rewards:** when a card is full, the customer shows the Rewards screen and staff tap "Staff: mark as claimed" twice.
 - **Order emails:** in Stripe, turn on Settings → Business → Customer emails → Successful payments. That emails customers their receipts. Every order also appears in Stripe → Payments, marked PICKUP IN STORE or SHIP.
 - **Change the password:** Cloudflare → the Worker → Settings → edit `ADMIN_PASSWORD`. The owner app will ask them to sign in again.
 
 ## Good to know
+- If checkout shows an error about **Managed Payments** or **tax codes**: that Stripe setting is for digital products. The Worker already turns it off for each checkout, so make sure you're running the latest `shop-worker.js`.
 - Photos are stored in the same Cloudflare storage as everything else, so there's nothing extra to set up. A shop with 20 products uses about 5 MB. Cloudflare's free plan allows 1 GB of storage, 1,000 saves and 100,000 reads a day per account. Photos are kept in Cloudflare's cache after the first view, so customers looking at them barely touches the read limit.
 - The rewards card and membership are remembered on the customer's phone. The member list itself is saved in the Worker, so members who switch phones can just join again with the same email.
 - Sales tax isn't calculated yet. Stripe Tax can be turned on later.
