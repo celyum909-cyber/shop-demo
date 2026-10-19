@@ -223,21 +223,36 @@ dialog.sheet[open]{animation:up .28s cubic-bezier(.2,.8,.2,1)}
 .earned{margin-top:14px;border:0;border-radius:12px;background:color-mix(in srgb,var(--reward) 30%,transparent);color:var(--ink);font-weight:700;padding:11px 14px}
 
 /* rewards */
-.punchcard{padding:18px 16px;border-radius:20px;background:var(--panel);border:1px solid var(--line);box-shadow:var(--shadow)}
-.punchcard.full{border-color:var(--reward);box-shadow:0 0 0 3px color-mix(in srgb,var(--reward) 35%,transparent),var(--shadow)}
-.punchcard .head{display:flex;justify-content:space-between;align-items:baseline}
-.punchcard .head b{font-size:18px}
-.punchcard .head span{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700}
-.punchcard p{margin:4px 0 14px;font-size:13.5px;color:var(--muted)}
-.punches{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
-.punch{aspect-ratio:1;border-radius:50%;border:2px dashed var(--line);display:grid;place-items:center;font-size:12px;font-weight:700;color:var(--muted)}
-.punch.on{border:0;background:var(--brand);color:var(--on-brand);box-shadow:0 3px 8px rgba(0,0,0,.18)}
-.punch.on svg{width:50%;height:50%;fill:none;stroke:var(--on-brand);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
-.punch.prize{border-style:solid;border-color:var(--reward);color:var(--reward-text);font-size:10px;letter-spacing:.5px}
-.punch.prize.on{background:var(--reward)}.punch.prize.on svg{stroke:var(--on-reward)}
-.punch.new{animation:stamp .5s cubic-bezier(.2,1.6,.4,1) both}
-@keyframes stamp{from{transform:scale(1.7) rotate(-15deg);opacity:0}}
-@media (prefers-reduced-motion:reduce){.punch.new{animation:none}}
+/* The punch card: same family as the member card and weekly drop (brand gradient, member-colour circle).
+   Punched holes are cut through the card, so you see the page behind them. */
+.pcard{position:relative;max-width:440px;margin:0 auto;border-radius:20px;color:var(--on-brand);background:linear-gradient(135deg,var(--brand),color-mix(in srgb,var(--brand) 55%,#000));box-shadow:var(--shadow);overflow:hidden;isolation:isolate}
+.pcard::after{content:"";position:absolute;right:-50px;bottom:-80px;width:210px;height:210px;border-radius:50%;background:var(--member);opacity:.22;z-index:-1}
+.pcard::before{content:"";position:absolute;left:-50px;top:-70px;width:150px;height:150px;border-radius:50%;background:var(--accent);opacity:.12;z-index:-1}
+.pc-notch{position:absolute;top:66px;width:22px;height:22px;border-radius:50%;background:var(--bg);box-shadow:inset 0 2px 3px rgba(0,0,0,.3)}
+.pc-notch.l{left:-11px}.pc-notch.r{right:-11px}
+.pc-top{display:flex;align-items:center;gap:12px;padding:18px 18px 16px}
+.pc-logo{width:40px;height:40px;border-radius:11px;flex:none;display:grid;place-items:center;font-weight:800;font-size:14px;letter-spacing:.5px;background:var(--on-brand);color:var(--brand);overflow:hidden}
+.pc-logo img{width:100%;height:100%;object-fit:cover}
+.pc-top small{display:block;font-size:11px;letter-spacing:1.8px;text-transform:uppercase;font-weight:800;color:var(--highlight)}
+.pc-top b{display:block;font-size:21px;line-height:1.15}
+.pc-top .pc-no{margin-left:auto;align-self:flex-start;font-size:11px;font-weight:700;letter-spacing:1px;opacity:.7;white-space:nowrap}
+.pc-body{padding:16px 20px 14px;border-top:2px dashed color-mix(in srgb,var(--on-brand) 30%,transparent)}
+.holes{display:grid;grid-template-columns:repeat(5,1fr);gap:12px 14px}
+.hole{position:relative;aspect-ratio:1;border-radius:50%;display:grid;place-items:center;border:2px dashed color-mix(in srgb,var(--on-brand) 40%,transparent);color:color-mix(in srgb,var(--on-brand) 70%,transparent);font-size:14px;font-weight:700}
+.hole.prize{border:2px solid var(--reward);color:var(--reward);font-size:10px;font-weight:800;letter-spacing:.6px;flex-direction:column;line-height:1;gap:2px}
+.hole.prize svg{width:16px;height:16px;fill:var(--reward)}
+.hole.on{border:0;background:var(--bg);box-shadow:inset 0 5px 7px rgba(0,0,0,.45),0 0 0 3px color-mix(in srgb,var(--member) 55%,transparent)}
+.hole.on>*{visibility:hidden}
+.hole.prize.on{box-shadow:inset 0 5px 7px rgba(0,0,0,.45),0 0 0 3px var(--reward)}
+.hole.new{animation:punch .45s cubic-bezier(.2,1.5,.4,1) both}
+.hole.new::after{content:"";position:absolute;inset:8%;border-radius:50%;background:var(--brand);box-shadow:0 2px 4px rgba(0,0,0,.3);animation:chad .9s ease-in both;animation-delay:inherit}
+@keyframes punch{from{transform:scale(.3);opacity:0}}
+@keyframes chad{0%{transform:none;opacity:1}100%{transform:translate(14px,70px) rotate(220deg) scale(.7);opacity:0}}
+@media (prefers-reduced-motion:reduce){.hole.new{animation:none}.hole.new::after{display:none}}
+.pc-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:14px;padding-top:10px;border-top:1px solid color-mix(in srgb,var(--on-brand) 18%,transparent);font-size:13px;opacity:.9}
+.pc-foot b{font-size:15px}
+.pcard.full{box-shadow:0 0 0 3px var(--reward),0 0 0 7px color-mix(in srgb,var(--reward) 30%,transparent),var(--shadow)}
+.pc-note{margin:18px 0 0;font-size:13.5px;color:var(--muted);text-align:center}
 .bar{height:8px;border-radius:4px;background:var(--panel-2);margin:16px 0 8px;overflow:hidden}
 .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--brand),var(--member));border-radius:4px;transition:width .5s}
 .bar-text{display:flex;justify-content:space-between;font-size:13px;color:var(--muted)}
@@ -587,7 +602,7 @@ function finishOrder(o) {
 function doneHTML(o) {
   const pr = o.punch, R = CFG.rewards;
   return `<div class="done"><div class="tick">✓</div><h3>Order placed</h3><p>Order <b>${esc(o.id)}</b></p>
-  <p>${o.fulfil === 'ship' ? "We'll email you when it ships." : "We'll have it ready at the counter. Bring your order number."}</p>
+  <p>${o.fulfil === 'ship' ? "You'll get a receipt by email, and we'll let you know when it ships." : "We'll have it ready at the counter. Bring your order number."}</p>
   ${o.lines ? `<ul>${o.lines.map(l => { const p = byId[l.id]; return p ? `<li><span>${l.qty} × ${esc(p.name)}${p.sizes.length > 1 ? ' (' + esc(l.size) + ')' : ''}</span><span>${money(l.price * l.qty)}</span></li>` : '' }).join('')}<li><b>Total</b><b>${money(o.total)}</b></li></ul>` : ''}
   ${o.practice ? '<span class="tag">Practice order · no card charged</span>' : ''}
   ${R?.enabled && pr ? `<br><button class="earned" type="button" id="rewards-link">${pr.full ? `Card complete: you've earned a ${esc(R.reward)}!` : pr.earned > 0 ? `+${pr.earned} punch${pr.earned > 1 ? 'es' : ''} · ${pr.now} of ${R.punches} on your card` : `${money(pr.toNext)} to your next punch`}</button>` : ''}
@@ -616,13 +631,19 @@ function renderRewards() {
   const v = $('#view-rewards');
   if (!R.enabled) { v.innerHTML = '<div class="empty"><b>Rewards are coming soon</b></div>'; return }
   const d = onCard(), n = punchesFor(d), full = n >= R.punches;
-  v.innerHTML = `<div class="punchcard${full ? ' full' : ''}" role="img" aria-label="${n} of ${R.punches} punches">
-    <div class="head"><b>${esc(S.name)}</b><span>Rewards</span></div>
-    <p>Every ${whole(R.punchValue)} you spend earns a punch. Fill all ${R.punches} for a <b>${esc(R.reward)}</b>.</p>
-    <div class="punches">${Array.from({ length: R.punches }, (_, i) => { const on = i < n, last = i === R.punches - 1; return `<span class="punch${on ? ' on' : ''}${last ? ' prize' : ''}${on && fresh >= 0 && i >= fresh ? ' new' : ''}" style="animation-delay:${Math.max(0, i - fresh) * .12}s">${on ? check : last ? 'FREE' : i + 1}</span>` }).join('')}</div>
-    <div class="bar"><i style="width:${Math.min(100, d / GOAL * 100)}%"></i></div>
-    <div class="bar-text"><span><b>${money(Math.min(d, GOAL))}</b> of ${whole(GOAL)}</span><span>${full ? 'Card complete' : `${money(R.punchValue - (d % R.punchValue))} to next punch`}</span></div>
+  const star = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2.5 2.9 6 6.6.8-4.9 4.5 1.3 6.5L12 17l-5.9 3.3 1.3-6.5L2.5 9.3l6.6-.8z"/></svg>';
+  const cardLogo = S.logo ? `<img src="${esc(S.logo)}" alt="">` : esc(S.initials || S.name.slice(0, 2).toUpperCase());
+  v.innerHTML = `<div class="pcard${full ? ' full' : ''}" role="img" aria-label="${esc(S.name)} rewards card: ${n} of ${R.punches} punched">
+    <span class="pc-notch l"></span><span class="pc-notch r"></span>
+    <div class="pc-top"><span class="pc-logo">${cardLogo}</span><div><small>Rewards card</small><b>${esc(S.name)}</b></div><span class="pc-no">No. ${String((rw.claimed || 0) + 1).padStart(3, '0')}</span></div>
+    <div class="pc-body">
+      <div class="holes">${Array.from({ length: R.punches }, (_, i) => { const on = i < n, last = i === R.punches - 1; return `<span class="hole${on ? ' on' : ''}${last ? ' prize' : ''}${on && fresh >= 0 && i >= fresh ? ' new' : ''}" style="animation-delay:${Math.max(0, i - fresh) * .15}s">${last ? `${star}<span>FREE</span>` : `<span>${i + 1}</span>`}</span>` }).join('')}</div>
+      <div class="pc-foot"><span>1 punch per ${whole(R.punchValue)} spent</span><span><b>${n}</b> of ${R.punches} punched</span></div>
+    </div>
   </div>
+  <p class="pc-note">Fill all ${R.punches} for a <b>${esc(R.reward)}</b>.</p>
+  <div class="bar"><i style="width:${Math.min(100, d / GOAL * 100)}%"></i></div>
+  <div class="bar-text"><span><b>${money(Math.min(d, GOAL))}</b> of ${whole(GOAL)}</span><span>${full ? 'Card complete' : `${money(R.punchValue - (d % R.punchValue))} to next punch`}</span></div>
   ${full ? `<div class="ready"><h3>You've earned a ${esc(R.reward)}!</h3><p>Show this screen at the counter to claim it.</p>${d > GOAL ? `<p>${money(d - GOAL)} carries over to your next card.</p>` : ''}<button class="ghost" type="button" id="claim">Staff: mark as claimed</button></div>` : ''}
   <h2 class="section">How it works</h2><ol class="how"><li>Shop in the app.</li><li>Every ${whole(R.punchValue)} spent stamps a punch (after discounts, not counting shipping).</li><li>${R.punches} punches = a ${esc(R.reward)}.</li></ol>
   <h2 class="section">Your orders</h2>${rw.orders.length ? `<ul class="history">${rw.orders.slice(0, 8).map(o => `<li><span>${new Date(o.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} · ${money(o.spent)}${o.practice ? ' (practice)' : ''}</span><span>${o.punches ? `+${o.punches}` : '—'}</span></li>`).join('')}</ul>` : '<p class="fine" style="text-align:left">No orders yet. Your first order starts the card.</p>'}
