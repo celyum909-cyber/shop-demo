@@ -68,6 +68,19 @@ The customer always pays the **single lowest price they qualify for**: the regul
 - Upload `privacy.html` next to `shop.html`. If the shop page is renamed (e.g. to `index.html`), change `SHOP_PAGE` at the bottom of `privacy.html` to match.
 - If the shop texts its members deals, have the lawyer check the texting rules too. They usually need clear permission from each person.
 
+## Install on phones (QR code)
+Customers scan the QR sign in the shop, the app opens, and after a couple of seconds an **"Add Shop to your phone"** banner slides up. Android shows a one-tap **Install app** button; iPhone shows the Share → Add to Home Screen steps (Apple doesn't allow an install button). Once installed, the shop icon sits on their home screen and opens full-screen like a normal app. No app store.
+
+These files make that work. Upload them **all to the main folder** of the site, next to `shop.html` (not in a subfolder):
+- `manifest.webmanifest`: the app's name ("Shop"), colors and icons. Change `name`/`short_name` for a real shop (keep `short_name` 12 characters or less).
+- `sw.js`: tells Android the site is an app. It caches nothing, so customers always see current prices and deals. Don't edit it.
+- `icon-192.png`, `icon-512.png`, `icon-maskable-512.png`, `apple-touch-icon.png`: the home-screen icon. For a real shop, replace them with its logo at the same sizes.
+- `qr-sign.pdf` (print this), `qr-sign.png`, `qr-code.png`: the QR code points to `https://celyum909-cyber.github.io/shop-demo/`. Make a new one if the address changes; a printed code can't be edited.
+
+The banner is built into `shop.html`. Tapping X hides it for 3 days, and the Help tab has a **Show me how on this phone** button that brings it back any time.
+
+**Test:** wait a couple of minutes after uploading, then scan the QR with an Android phone in Chrome. Tap **Install app** and check the icon on the home screen. On iPhone, use Safari.
+
 ## Owner tips
 - **Weekly drop:** pick a product, a price below regular, and an end date. It disappears on its own after that date. "Members only" means everyone sees it but only members get the price, which is a good reason to join.
 - **Sales:** type a sale price next to any item. Leave the box empty for no sale.

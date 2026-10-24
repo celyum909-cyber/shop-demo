@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Shop</title>
 <meta name="theme-color" content="#072448">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Shop">
 
 <!-- =====================================================================
      SHOP SETTINGS — this is the only part you edit for a new shop.
@@ -315,6 +320,21 @@ form.join input{width:100%;min-height:46px;border:1px solid var(--line);border-r
 .faq .body ol,.faq .body ul{margin:0 0 8px;padding-left:20px}
 .faq .body li{margin-bottom:4px}
 .help-go{border:0;background:none;padding:0;color:var(--brand-text);font-weight:700;text-decoration:underline;font:inherit}
+
+/* ---------- ADD TO PHONE BANNER ---------- */
+.a2hs{position:fixed;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:200;max-width:460px;margin:0 auto;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:16px;box-shadow:0 18px 50px -12px rgba(0,0,0,.45);padding:14px 12px;display:flex;gap:12px;align-items:flex-start;transform:translateY(160%);transition:transform .35s ease}
+.a2hs[hidden]{display:none}
+.a2hs.show{transform:none}
+.a2hs img{width:48px;height:48px;border-radius:12px;flex:none}
+.a2hs-body{flex:1;min-width:0}
+.a2hs-title{font-weight:800;font-size:15px}
+.a2hs-steps{font-size:13.5px;color:var(--muted);line-height:1.45;margin-top:4px}
+.a2hs-steps b{color:var(--ink)}
+.a2hs-share{display:inline-block;width:15px;height:15px;vertical-align:-2px}
+.a2hs-install{margin-top:10px;background:var(--brand);color:#fff;border:0;border-radius:999px;padding:10px 18px;font-weight:800;font-size:13px;cursor:pointer}
+:root[data-theme="dark"] .a2hs-install{background:color-mix(in srgb,var(--brand) 70%,#fff)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .a2hs-install{background:color-mix(in srgb,var(--brand) 70%,#fff)}}
+.a2hs-close{flex:none;background:none;border:0;color:var(--muted);font-size:24px;line-height:1;padding:0 4px;cursor:pointer}
 </style>
 </head>
 <body>
@@ -740,7 +760,7 @@ function renderHelp() {
     M.enabled ? q('Becoming a member', `<ol><li>Open the ${go('members', 'Members')} tab.</li><li>Enter your first name and email, then tap <b>Join free</b>.</li><li>Prices drop straight away${pct ? `: <b>${pct}% off</b> everything` : ''}, applied for you at checkout.</li></ol><p>New phone? Join again with the <b>same email</b> and your member prices come back. To sign out on this phone, tap <b>Remove membership from this phone</b> at the bottom of the Members tab.</p>`) : '',
     R.enabled ? q('Rewards card', `<ul><li>Every <b>${whole(R.punchValue)}</b> you spend earns a punch (after discounts, not counting shipping).</li><li>Fill all <b>${R.punches}</b> punches for a <b>${esc(R.reward)}</b>.</li><li>Only paid orders count. Your card is in the ${go('rewards', 'Rewards')} tab.</li><li>When it's full, show that screen at the counter to claim your reward.</li></ul><p>The card is saved on this phone, so use the same phone and browser each time. Clearing your browser data resets it.</p>`) : '',
     q('Share the shop with friends', `<p>At the bottom of the ${go('members', 'Members')} tab there's a QR code. A friend can point their phone camera at it to open the shop. Or tap <b>Share link</b> to send it in a text.</p>`),
-    q('Put the app on your home screen', `<ul><li><b>iPhone (Safari):</b> tap the Share button, then <b>Add to Home Screen</b>.</li><li><b>Android (Chrome):</b> tap the ⋮ menu, then <b>Add to Home screen</b> or <b>Install app</b>.</li></ul><p>It opens like an app, with no app store needed.</p>`),
+    q('Put the app on your home screen', `<ul><li><b>iPhone (Safari):</b> tap the Share button, then <b>Add to Home Screen</b>.</li><li><b>Android (Chrome):</b> tap the ⋮ menu, then <b>Add to Home screen</b> or <b>Install app</b>.</li></ul><p>It opens like an app, with no app store needed.</p><p><button type="button" class="help-go" onclick="window.shopShowInstall && window.shopShowInstall()">Show me how on this phone</button></p>`),
   ].join('');
   const contact = [S.phone ? `<li><b>Phone</b><a href="tel:${esc(S.phone.replace(/[^\d+]/g, ''))}">${esc(S.phone)}</a></li>` : '', S.email ? `<li><b>Email</b><a href="mailto:${esc(S.email)}">${esc(S.email)}</a></li>` : '', S.address ? `<li><b>Address</b>${esc(S.address)}</li>` : '', S.hours ? `<li><b>Hours</b>${esc(S.hours)}</li>` : ''].join('');
   $('#view-help').innerHTML = `<h2 class="section" style="margin-top:4px">How to use the app</h2><p class="help-intro">Quick answers about ordering, membership and rewards at ${esc(S.name)}.</p>${items}${contact ? `<h2 class="section">Still have a question?</h2><ul class="info">${contact}</ul>` : ''}${CFG.privacy?.page ? `<p class="fine" style="margin-top:16px"><a href="${esc(CFG.privacy.page)}">Privacy policy</a>: what we collect and how to have it deleted.</p>` : ''}`;
@@ -794,6 +814,71 @@ if (qs.get('checkout')) {
   };
   b.addEventListener('click', () => { const next = isDark() ? 'light' : 'dark'; document.documentElement.dataset.theme = next; try { localStorage.setItem('shop-theme', next) } catch (e) {} sync() });
   mq.addEventListener?.('change', sync); sync();
+})();
+</script>
+<!-- ============ ADD TO PHONE BANNER ============ -->
+<div class="a2hs" id="a2hs" role="dialog" aria-label="Add Shop to your phone" hidden>
+  <img src="icon-192.png" alt="">
+  <div class="a2hs-body">
+    <div class="a2hs-title">Add Shop to your phone</div>
+    <div class="a2hs-steps" id="a2hs-steps"></div>
+    <button class="a2hs-install" id="a2hs-install" type="button" hidden>Install app</button>
+  </div>
+  <button class="a2hs-close" id="a2hs-close" type="button" aria-label="Close">&times;</button>
+</div>
+<script>
+(function(){
+  // Register the (non-caching) service worker so Android offers "Install app".
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', function(){ navigator.serviceWorker.register('sw.js').catch(function(){}); });
+  }
+  var KEY = 'shop-a2hs-dismissed-v1';
+  var banner = document.getElementById('a2hs');
+  var steps = document.getElementById('a2hs-steps');
+  var installBtn = document.getElementById('a2hs-install');
+  var deferred = null;
+  var ua = navigator.userAgent || '';
+  var isIOS = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  var isAndroid = /Android/.test(ua);
+  var isPhone = isIOS || isAndroid;
+  var installed = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+
+  function dismissedRecently(){ try{ return Date.now() - (+localStorage.getItem(KEY) || 0) < 3 * 864e5; }catch(e){ return false; } }
+  function remember(){ try{ localStorage.setItem(KEY, String(Date.now())); }catch(e){} }
+  function hide(){ banner.classList.remove('show'); setTimeout(function(){ banner.hidden = true; }, 400); }
+  function show(){
+    banner.hidden = false;
+    requestAnimationFrame(function(){ requestAnimationFrame(function(){ banner.classList.add('show'); }); });
+  }
+
+  var shareIcon = '<svg class="a2hs-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>';
+  if(isIOS){
+    steps.innerHTML = 'Tap ' + shareIcon + ' <b>Share</b> in Safari, then <b>Add to Home Screen</b>.';
+  } else {
+    steps.innerHTML = 'Tap the <b>&#8942;</b> menu at the top right, then <b>Install app</b> or <b>Add to Home screen</b>.';
+  }
+
+  // Android / Chrome: use the real one-tap install when the browser offers it.
+  window.addEventListener('beforeinstallprompt', function(e){
+    e.preventDefault();
+    deferred = e;
+    steps.textContent = 'One tap, no app store needed.';
+    installBtn.hidden = false;
+  });
+  installBtn.addEventListener('click', function(){
+    if(!deferred) return;
+    deferred.prompt();
+    deferred.userChoice.then(function(c){ deferred = null; installBtn.hidden = true; if(c && c.outcome === 'accepted'){ hide(); } });
+  });
+  window.addEventListener('appinstalled', function(){ remember(); hide(); });
+  document.getElementById('a2hs-close').addEventListener('click', function(){ remember(); hide(); });
+
+  // The Help tab's "Add to my phone" button calls this, so the banner can always be reopened.
+  window.shopShowInstall = function(){
+    if(installed){ steps.textContent = "You're already using the Shop app."; installBtn.hidden = true; }
+    show();
+  };
+  if(isPhone && !installed && !dismissedRecently()){ setTimeout(show, 2500); }
 })();
 </script>
 </body>
