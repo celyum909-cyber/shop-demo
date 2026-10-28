@@ -75,6 +75,7 @@ These files make that work. Upload them **all to the main folder** of the site, 
 - `manifest.webmanifest`: the app's name ("Shop"), colors and icons. Change `name`/`short_name` for a real shop (keep `short_name` 12 characters or less).
 - `sw.js`: tells Android the site is an app. It caches nothing, so customers always see current prices and deals. Don't edit it.
 - `icon-192.png`, `icon-512.png`, `icon-maskable-512.png`, `apple-touch-icon.png`: the home-screen icon. For a real shop, replace them with its logo at the same sizes.
+- `owner.webmanifest`, `owner-icon-192.png`, `owner-icon-512.png`, `owner-icon-maskable-512.png`, `owner-apple-touch-icon.png`: the same for `owner.html`, so the owner can add their owner page to the home screen as its own **Shop Owner** app with a gold key icon (iPhone: Safari → Share → Add to Home Screen; Android: Chrome → Install app). For a real shop, change `name` in `owner.webmanifest` and `apple-mobile-web-app-title` in `owner.html` to the shop's name plus "Owner".
 - `qr-sign.pdf` (print this), `qr-sign.png`, `qr-code.png`: the QR code points to `https://celyum909-cyber.github.io/shop-demo/`. Make a new one if the address changes; a printed code can't be edited.
 
 The banner is built into `shop.html`. Tapping X hides it for 3 days, and the Help tab has a **Show me how on this phone** button that brings it back any time.

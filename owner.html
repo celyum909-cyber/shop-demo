@@ -6,6 +6,12 @@
 <title>Shop Owner</title>
 <meta name="robots" content="noindex">
 <meta name="theme-color" content="#072448">
+<!-- Lets owners add this page to their home screen as its own "Shop Owner" app (gold key icon). -->
+<link rel="manifest" href="owner.webmanifest">
+<link rel="apple-touch-icon" href="owner-apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Shop Owner">
 <script>
 // Light / dark mode: follows the phone until the customer picks one, then remembers it.
 (function () { try { var t = localStorage.getItem('shop-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t } catch (e) {} })();
@@ -432,6 +438,10 @@ else if (!SHOP_API) say($('#login-msg'), 'Setup needed: add your Worker address 
   b.addEventListener('click', () => { const next = isDark() ? 'light' : 'dark'; document.documentElement.dataset.theme = next; try { localStorage.setItem('shop-theme', next) } catch (e) {} sync() });
   mq.addEventListener?.('change', sync); sync();
 })();
+</script>
+<script>
+// The same non-caching service worker as the shop, so Android offers "Install app" for the owner page too.
+if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 </script>
 </body>
 </html>

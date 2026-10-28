@@ -1,0 +1,16 @@
+{
+  "name": "Shop Owner",
+  "short_name": "Owner",
+  "description": "Run your shop: weekly drop, sales, photos, members and sales numbers.",
+  "id": "./owner.html",
+  "start_url": "./owner.html",
+  "scope": "./owner.html",
+  "display": "standalone",
+  "background_color": "#072448",
+  "theme_color": "#072448",
+  "icons": [
+    { "src": "owner-icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "owner-icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "owner-icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
