@@ -26,7 +26,7 @@ Open `shop.html` in a text editor. Everything you change is in the **SHOP SETTIN
   - `memberPrice` (optional): a set price for members instead of the % off.
 - **categories**: the filter buttons, in order.
 - **shipping**: turn it on or off and set the flat fee.
-- **rewards**: dollars per punch, punches needed and the reward name.
+- **rewards**: `punchValue` is the smallest order that earns a punch. Each order of that amount or more earns one punch, however big it is (after discounts, not counting shipping). Also set the punches needed and the reward name.
 - **members**: turn it on or off, the starting % off and the perks list.
 - **demo**: the drop and sales shown in practice mode only. Once the Worker is connected, the owner sets these from `owner.html`.
 

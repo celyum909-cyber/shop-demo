@@ -38,7 +38,7 @@
   "members": {
     "enabled": true,
     "percentOff": 10,
-    "perks": ["Member prices on everything", "Members-only weekly drops", "Rewards punches on every order"]
+    "perks": ["Member prices on everything", "Members-only weekly drops", "A rewards punch on every order of $20 or more"]
   },
   "categories": ["Tees", "Hoodies", "Hats", "Extras"],
   "products": [
@@ -625,25 +625,30 @@ function doneHTML(o) {
   <p>${o.fulfil === 'ship' ? "You'll get a receipt by email, and we'll let you know when it ships." : "We'll have it ready at the counter. Bring your order number."}</p>
   ${o.lines ? `<ul>${o.lines.map(l => { const p = byId[l.id]; return p ? `<li><span>${l.qty} × ${esc(p.name)}${p.sizes.length > 1 ? ' (' + esc(l.size) + ')' : ''}</span><span>${money(l.price * l.qty)}</span></li>` : '' }).join('')}<li><b>Total</b><b>${money(o.total)}</b></li></ul>` : ''}
   ${o.practice ? '<span class="tag">Practice order · no card charged</span>' : ''}
-  ${R?.enabled && pr ? `<br><button class="earned" type="button" id="rewards-link">${pr.full ? `Card complete: you've earned a ${esc(R.reward)}!` : pr.earned > 0 ? `+${pr.earned} punch${pr.earned > 1 ? 'es' : ''} · ${pr.now} of ${R.punches} on your card` : `${money(pr.toNext)} to your next punch`}</button>` : ''}
+  ${R?.enabled && pr ? `<br><button class="earned" type="button" id="rewards-link">${pr.full ? `Card complete: you've earned a ${esc(R.reward)}!` : pr.earned > 0 ? `+1 punch · ${pr.now} of ${R.punches} on your card` : `Orders of ${whole(R.punchValue)} or more earn a punch`}</button>` : ''}
   <br><button class="ghost" type="button" data-go="shop">Keep shopping</button></div>`;
 }
 
 // ---------- Rewards punch card ----------
-const R = CFG.rewards || {}, GOAL = (R.punchValue || 20) * (R.punches || 10);
-let rw = load('rewards', { spent: 0, claimed: 0, orders: [] }), fresh = -1, armT;
-const onCard = () => Math.max(0, rw.spent - rw.claimed * GOAL);
-const punchesFor = d => Math.min(R.punches, Math.floor(d / R.punchValue + 1e-9));
+// One punch per order, as long as the order is at least "punchValue" (after discounts, not counting shipping).
+// A bigger order still earns just one punch.
+const R = CFG.rewards || {};
+let rw = load('rewards', { spent: 0, claimed: 0, orders: [], earned: 0 }), fresh = -1, armT;
+// Cards saved under the old rule counted total spending; keep the punches those customers already had.
+if (typeof rw.earned !== 'number') { rw.earned = Math.floor((rw.spent || 0) / (R.punchValue || 20) + 1e-9); store('rewards', rw) }
+const onCard = () => Math.max(0, rw.earned - rw.claimed * R.punches); // punches on this card, plus any extra for the next
+const punchesFor = p => Math.min(R.punches, p);
 function earnPunches(id, spent, practice) {
   if (!R.enabled || !(spent > 0)) return null;
   if (practice && API) return null; // once Stripe is connected, only paid orders count
   if (rw.orders.some(o => o.id === id)) return null; // each order counts once
   const before = punchesFor(onCard());
-  rw.spent = round2(rw.spent + spent);
+  const earned = spent + 1e-9 >= R.punchValue ? 1 : 0; // one punch, however big the order
+  rw.spent = round2(rw.spent + spent); rw.earned += earned;
   const now = punchesFor(onCard());
-  rw.orders.unshift({ id, at: Date.now(), spent, punches: now - before, practice: !!practice }); rw.orders = rw.orders.slice(0, 30);
+  rw.orders.unshift({ id, at: Date.now(), spent, punches: earned, practice: !!practice }); rw.orders = rw.orders.slice(0, 30);
   store('rewards', rw); fresh = now > before ? before : -1; renderDot();
-  return { earned: now - before, now, full: now >= R.punches, toNext: R.punchValue - (onCard() % R.punchValue) };
+  return { earned, now, full: now >= R.punches };
 }
 function renderDot() { $('#tab-rewards .dot').hidden = !(R.enabled && punchesFor(onCard()) >= R.punches) }
 const check = '<svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
@@ -658,14 +663,14 @@ function renderRewards() {
     <div class="pc-top"><span class="pc-logo">${cardLogo}</span><div><small>Rewards card</small><b>${esc(S.name)}</b></div><span class="pc-no">No. ${String((rw.claimed || 0) + 1).padStart(3, '0')}</span></div>
     <div class="pc-body">
       <div class="holes">${Array.from({ length: R.punches }, (_, i) => { const on = i < n, last = i === R.punches - 1; return `<span class="hole${on ? ' on' : ''}${last ? ' prize' : ''}${on && fresh >= 0 && i >= fresh ? ' new' : ''}" style="animation-delay:${Math.max(0, i - fresh) * .15}s">${last ? `${star}<span>FREE</span>` : `<span>${i + 1}</span>`}</span>` }).join('')}</div>
-      <div class="pc-foot"><span>1 punch per ${whole(R.punchValue)} spent</span><span><b>${n}</b> of ${R.punches} punched</span></div>
+      <div class="pc-foot"><span>1 punch per order of ${whole(R.punchValue)}+</span><span><b>${n}</b> of ${R.punches} punched</span></div>
     </div>
   </div>
   <p class="pc-note">Fill all ${R.punches} for a <b>${esc(R.reward)}</b>.</p>
-  <div class="bar"><i style="width:${Math.min(100, d / GOAL * 100)}%"></i></div>
-  <div class="bar-text"><span><b>${money(Math.min(d, GOAL))}</b> of ${whole(GOAL)}</span><span>${full ? 'Card complete' : `${money(R.punchValue - (d % R.punchValue))} to next punch`}</span></div>
-  ${full ? `<div class="ready"><h3>You've earned a ${esc(R.reward)}!</h3><p>Show this screen at the counter to claim it.</p>${d > GOAL ? `<p>${money(d - GOAL)} carries over to your next card.</p>` : ''}<button class="ghost" type="button" id="claim">Staff: mark as claimed</button></div>` : ''}
-  <h2 class="section">How it works</h2><ol class="how"><li>Shop in the app.</li><li>Every ${whole(R.punchValue)} spent stamps a punch (after discounts, not counting shipping).</li><li>${R.punches} punches = a ${esc(R.reward)}.</li></ol>
+  <div class="bar"><i style="width:${Math.min(100, n / R.punches * 100)}%"></i></div>
+  <div class="bar-text"><span><b>${n}</b> of ${R.punches} punches</span><span>${full ? 'Card complete' : `${R.punches - n} to go`}</span></div>
+  ${full ? `<div class="ready"><h3>You've earned a ${esc(R.reward)}!</h3><p>Show this screen at the counter to claim it.</p>${d > R.punches ? `<p>${d - R.punches} extra punch${d - R.punches > 1 ? 'es carry' : ' carries'} over to your next card.</p>` : ''}<button class="ghost" type="button" id="claim">Staff: mark as claimed</button></div>` : ''}
+  <h2 class="section">How it works</h2><ol class="how"><li>Shop in the app.</li><li>Each order of ${whole(R.punchValue)} or more earns one punch, however big the order (after discounts, not counting shipping).</li><li>${R.punches} punches = a ${esc(R.reward)}.</li></ol>
   <h2 class="section">Your orders</h2>${rw.orders.length ? `<ul class="history">${rw.orders.slice(0, 8).map(o => `<li><span>${new Date(o.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} · ${money(o.spent)}${o.practice ? ' (practice)' : ''}</span><span>${o.punches ? `+${o.punches}` : '—'}</span></li>`).join('')}</ul>` : '<p class="fine" style="text-align:left">No orders yet. Your first order starts the card.</p>'}
   <p class="fine">${API ? 'Only paid orders earn punches.' : 'Practice mode: test orders earn punches so you can see the card work.'} Your card is saved on this phone.</p>`;
   fresh = -1;
@@ -758,7 +763,7 @@ function renderHelp() {
       : q('Picking up your order', `<p>Orders are picked up in store.${S.address ? ` Find us at ${esc(S.address)}.` : ''}${S.hours ? ` Hours: ${esc(S.hours)}.` : ''}</p>`),
     q('Deals and prices', `<p>Look out for <b>this week's drop</b> at the top of the shop, and items marked on sale.${M.enabled ? ' Members also get their own prices.' : ''}</p><p>You always pay the <b>single lowest price</b> you qualify for. Deals don't stack, and the cart always shows what you'll pay before you check out.</p>`),
     M.enabled ? q('Becoming a member', `<ol><li>Open the ${go('members', 'Members')} tab.</li><li>Enter your first name and email, then tap <b>Join free</b>.</li><li>Prices drop straight away${pct ? `: <b>${pct}% off</b> everything` : ''}, applied for you at checkout.</li></ol><p>New phone? Join again with the <b>same email</b> and your member prices come back. To sign out on this phone, tap <b>Remove membership from this phone</b> at the bottom of the Members tab.</p>`) : '',
-    R.enabled ? q('Rewards card', `<ul><li>Every <b>${whole(R.punchValue)}</b> you spend earns a punch (after discounts, not counting shipping).</li><li>Fill all <b>${R.punches}</b> punches for a <b>${esc(R.reward)}</b>.</li><li>Only paid orders count. Your card is in the ${go('rewards', 'Rewards')} tab.</li><li>When it's full, show that screen at the counter to claim your reward.</li></ul><p>The card is saved on this phone, so use the same phone and browser each time. Clearing your browser data resets it.</p>`) : '',
+    R.enabled ? q('Rewards card', `<ul><li>Each order of <b>${whole(R.punchValue)} or more</b> earns one punch, however big the order (after discounts, not counting shipping).</li><li>Fill all <b>${R.punches}</b> punches for a <b>${esc(R.reward)}</b>.</li><li>Only paid orders count. Your card is in the ${go('rewards', 'Rewards')} tab.</li><li>When it's full, show that screen at the counter to claim your reward.</li></ul><p>The card is saved on this phone, so use the same phone and browser each time. Clearing your browser data resets it.</p>`) : '',
     q('Share the shop with friends', `<p>At the bottom of the ${go('members', 'Members')} tab there's a QR code. A friend can point their phone camera at it to open the shop. Or tap <b>Share link</b> to send it in a text.</p>`),
     q('Put the app on your home screen', `<ul><li><b>iPhone (Safari):</b> tap the Share button, then <b>Add to Home Screen</b>.</li><li><b>Android (Chrome):</b> tap the ⋮ menu, then <b>Add to Home screen</b> or <b>Install app</b>.</li></ul><p>It opens like an app, with no app store needed.</p><p><button type="button" class="help-go" onclick="window.shopShowInstall && window.shopShowInstall()">Show me how on this phone</button></p>`),
   ].join('');
