@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Mars · shop plan</title>
+<meta name="robots" content="noindex">
+<!--
+  MARS ONLY: start a shop's 30-day free trial at hand-over, check its dates, or record a payment by hand.
+  Uses MARS_PASSWORD (set in the shop's Cloudflare Worker), never the owner's password.
+  Set SHOP_API below to the same Worker address as in shop.html and owner/index.html.
+-->
+<style>
+:root{--brand:#072448;--bg:#f5f6f8;--panel:#fff;--ink:#0e1a2b;--muted:#5f6b7a;--line:#e1e5ec;--bad:#c2462f;--ok:#2d7a4b}
+@media (prefers-color-scheme: dark){:root{--bg:#0b1220;--panel:#121b2c;--ink:#eef2f7;--muted:#9aa7b8;--line:#26324a;--bad:#ff8a73;--ok:#6fd19a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color-scheme:light dark}
+main{max-width:520px;margin:0 auto;padding:20px 16px 48px}
+h1{font-size:22px;margin:0 0 4px}
+.sub{color:var(--muted);margin:0 0 8px;font-size:13.5px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;margin-top:16px}
+.card h2{margin:0 0 6px;font-size:17px}
+label{display:block;font-size:13px;font-weight:600;margin:12px 0 5px}
+input{width:100%;min-height:46px;border:1px solid var(--line);border-radius:11px;padding:10px 12px;background:var(--panel);color:inherit;font:inherit;font-size:16px}
+button{width:100%;min-height:48px;margin-top:14px;border:0;border-radius:12px;background:var(--brand);color:#fff;font:inherit;font-weight:800;cursor:pointer}
+button.alt{background:none;border:1px solid var(--line);color:inherit}
+button:disabled{opacity:.55}
+.msg{min-height:20px;margin:10px 0 0;font-size:13.5px}
+.msg.ok{color:var(--ok)}.msg.bad{color:var(--bad)}
+dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:6px 0 0;font-size:14px}
+dt{color:var(--muted)}dd{margin:0;font-weight:600}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+</style>
+</head>
+<body>
+<main>
+  <h1>Shop plan</h1>
+  <p class="sub">For Mars only. Start the free trial when you hand the app over.</p>
+
+  <section class="card">
+    <label for="pw">Mars password</label>
+    <input id="pw" type="password" autocomplete="current-password">
+    <button type="button" id="look">Show this shop's plan</button>
+    <p class="msg" id="look-msg" aria-live="polite"></p>
+    <dl id="facts" hidden></dl>
+  </section>
+
+  <form class="card" id="start">
+    <h2>Start the 30-day free trial</h2>
+    <p class="sub">These details fill in the owner's Keep your app form later. The owner agrees to the trial terms the first time they open the owner app.</p>
+    <label for="name">Owner's name</label><input id="name" maxlength="60">
+    <label for="biz">Business name</label><input id="biz" maxlength="80">
+    <div class="two"><div><label for="email">Email</label><input id="email" type="email" maxlength="120"></div><div><label for="phone">Phone</label><input id="phone" type="tel" maxlength="30"></div></div>
+    <button type="submit">Start free trial</button>
+    <p class="msg" id="start-msg" aria-live="polite"></p>
+  </form>
+
+  <form class="card" id="dates">
+    <h2>Change dates by hand</h2>
+    <p class="sub">For a payment made in cash or by check, set the paid-through date. Leave a box empty to keep it as it is.</p>
+    <div class="two"><div><label for="paid">Paid through</label><input id="paid" type="date"></div><div><label for="trial">Trial ends</label><input id="trial" type="date"></div></div>
+    <button type="submit" class="alt">Save dates</button>
+    <p class="msg" id="dates-msg" aria-live="polite"></p>
+  </form>
+</main>
+<script>
+'use strict';
+const SHOP_API = 'https://shop-demo.celyum909.workers.dev';
+const $ = s => document.querySelector(s);
+const say = (el, t, ok) => { el.textContent = t; el.className = 'msg ' + (ok ? 'ok' : 'bad') };
+const day = ms => ms ? new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '–';
+async function call(path, body) {
+  if (!SHOP_API) throw new Error('Set SHOP_API at the bottom of mars.html first.');
+  let res;
+  try { res = await fetch(SHOP_API.replace(/\/+$/, '') + path, { method: body ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json', 'X-Mars-Password': $('#pw').value }, body: body ? JSON.stringify(body) : undefined }) }
+  catch { throw new Error("Can't reach the Worker. Check the connection.") }
+  const d = await res.json().catch(() => ({}));
+  if (res.status === 404 && d.error === 'Not found') throw new Error('This Worker is the old version. Paste in the new shop-worker.js first.');
+  if (!res.ok) throw Object.assign(new Error(d.error || `Error ${res.status}`), { data: d });
+  return d;
+}
+const LABEL = { none: 'No trial started', trial: 'Free trial', paid: 'Paid', grace: 'Grace days (still taking orders)', paused: 'Checkout paused' };
+function show(d) {
+  const p = d.plan || {}, s = p.signup || {}, f = $('#facts');
+  f.hidden = false;
+  f.innerHTML = [['State', LABEL[d.state] || d.state], ['Trial started', day(p.trialStart)], ['Trial ends', day(p.trialEnds)], ['Paid through', day(p.paidUntil)], ['Checkout pauses', d.pauseAt ? day(d.pauseAt) : '–'],
+    ['Owner agreed to trial terms', day(p.termsAgreedAt)], ['Card payments', p.account ? (p.paymentsOn ? 'On' : 'Set-up started') : 'Not set up'], ['Owner', [s.name, s.business].filter(Boolean).join(', ') || '–'], ['Email', s.email || '–']]
+    .map(([k, v]) => `<dt>${k}</dt><dd>${String(v).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))}</dd>`).join('');
+}
+$('#look').onclick = async () => { const m = $('#look-msg'); say(m, 'Checking…', true); try { show(await call('/mars/plan')); say(m, '') } catch (e) { say(m, e.message) } };
+$('#start').addEventListener('submit', async e => {
+  e.preventDefault(); const m = $('#start-msg');
+  const body = { name: $('#name').value, business: $('#biz').value, email: $('#email').value, phone: $('#phone').value };
+  try { show(await call('/mars/activate', body)); say(m, 'Trial started. It ends in 30 days.', true) }
+  catch (err) {
+    if (err.data?.plan && confirm('This shop already has a trial. Start a new 30-day trial from today?')) {
+      try { show(await call('/mars/activate', { ...body, restart: true })); say(m, 'New 30-day trial started.', true) } catch (e2) { say(m, e2.message) }
+    } else say(m, err.message);
+  }
+});
+$('#dates').addEventListener('submit', async e => {
+  e.preventDefault(); const m = $('#dates-msg'), body = {};
+  if ($('#paid').value) body.paidUntil = $('#paid').value;
+  if ($('#trial').value) body.trialEnds = $('#trial').value;
+  if (!Object.keys(body).length) return say(m, 'Pick a date first.');
+  try { show(await call('/mars/plan', body)); say(m, 'Dates saved.', true) } catch (err) { say(m, err.message) }
+});
+</script>
+</body>
+</html>

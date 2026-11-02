@@ -82,6 +82,32 @@ The banner is built into `shop.html`. Tapping X hides it for 3 days, and the Hel
 
 **Test:** wait a couple of minutes after uploading, then scan the QR with an Android phone in Chrome. Tap **Install app** and check the icon on the home screen. On iPhone, use Safari.
 
+## Free trial, keeping the app, and card payments
+
+Every new shop gets a 30-day free trial. The owner signs up and pays for the year from inside the owner app, and customer card payments go to the shop's own Stripe account (Stripe Connect).
+
+**One-time setup on Mars's side (once, not per shop):**
+1. In Mars's Stripe dashboard, switch on **Connect** (Settings → Connect → Get started). Answer Stripe's questions about the platform, and add its name, colour and icon (Stripe shows them on the sign-up form). The Worker sets each shop up to pay Stripe's card fees itself, so Mars pays no Connect fees.
+2. Every shop's Worker uses **Mars's own** `STRIPE_SECRET_KEY`.
+
+**For each shop's Worker** (Settings → Variables and Secrets), as well as the settings in step 3:
+- `STRIPE_PUBLISHABLE_KEY`, type **Text**: Mars's `pk_test_...` (later `pk_live_...`). It shows Stripe's sign-up form inside the owner app.
+- `MARS_PASSWORD`, type **Secret**: Mars's own password for `mars.html`. Keep it different from the owner's password.
+- `YEAR_PRICE`, type **Text** (optional): the yearly price in dollars. It's 600 if not set.
+
+**At hand-over:**
+1. Open `mars.html` on the shop's site, type the Mars password, fill in the owner's details and tap **Start free trial**. (Set `SHOP_API` at the bottom of `mars.html` first, the same as in `owner/index.html`.)
+2. The owner opens the owner app, agrees to the trial terms, and taps **Set up payments**. Stripe's form opens inside the app. Until it's done, customers see "card payments are being set up" at checkout.
+3. When the owner decides to keep the app, they tap **Keep your app**, fill in their details, agree to the service agreement and pay. Their year starts when the trial ends.
+
+**What happens when time runs out:** reminders in the owner app start 7 days before the trial ends (30 days before a paid year ends). After it ends the shop takes orders for 3 more days, then checkout pauses. Customers can still browse. Nothing is deleted, and paying switches ordering back on at once.
+
+**Paid in cash?** On `mars.html`, set the **Paid through** date by hand.
+
+**Shops with no trial started** work exactly as before, so existing shops aren't affected until Mars starts a trial.
+
+- `terms.html`: the trial terms, the service agreement and the privacy notice for shop owners. Fill in `PROVIDER` at the bottom (business name, email, state, start date), and have a lawyer review it before relying on it.
+
 ## Owner tips
 - **Weekly drop:** pick a product, a price below regular, and an end date. It disappears on its own after that date. "Members only" means everyone sees it but only members get the price, which is a good reason to join.
 - **Sales:** type a sale price next to any item. Leave the box empty for no sale.

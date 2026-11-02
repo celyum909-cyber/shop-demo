@@ -12,6 +12,23 @@
 //   POST /admin/photo      -> uploads or removes a product photo (password required)
 //   GET  /photo/<id>       -> a product photo (public)
 //
+// Free trial, the yearly plan and Stripe Connect (owner app):
+//   GET  /admin/plan       -> trial / paid dates, state and sign-up details (password required)
+//   POST /admin/terms      -> records that the owner agreed to the trial terms (password required)
+//   POST /admin/plan/checkout -> "Keep your app": saves sign-up details, returns a Stripe page for one year
+//   POST /admin/plan/confirm  -> after paying: checks with Stripe, then moves the paid-through date
+//   POST /admin/payments/session -> creates the shop's own Stripe account (first time) and opens
+//                             Stripe's sign-up form inside the owner app
+//   GET  /admin/payments/status  -> asks Stripe whether the shop can take card payments yet
+// Mars only (X-Mars-Password header):
+//   GET  /mars/plan        -> this shop's plan record and state
+//   POST /mars/activate    -> starts the 30-day free trial (body: name, business, email, phone)
+//   POST /mars/plan        -> changes dates by hand, e.g. { "paidUntil": "2027-12-02" } for a cash payment
+//
+// A shop with no trial started (no "plan" record) works exactly as before: checkout uses
+// STRIPE_SECRET_KEY directly. Once Mars starts the trial, card payments go to the shop's own
+// connected Stripe account, and checkout pauses 3 days after the trial or paid year runs out.
+//
 // Products and regular prices are read from the shop's own page (the "shop-config" block in
 // shop.html), so prices only ever live in one place and customers can't change what they pay.
 //
@@ -20,11 +37,19 @@
 //   ADMIN_PASSWORD     Secret — the owner's password (never put it in any file)
 //   STRIPE_SECRET_KEY  Secret — sk_test_... while practicing, sk_live_... for real orders
 //   SITE_URL           Text   — the full address of shop.html, e.g. https://yourshop.com/shop.html
+// For the free trial and yearly plan (only needed once Mars starts a trial):
+//   STRIPE_SECRET_KEY  becomes Mars's own key (the same in every shop's Worker), with Connect switched on
+//   STRIPE_PUBLISHABLE_KEY Text — Mars's pk_test_... / pk_live_... (shows Stripe's sign-up form in the app)
+//   MARS_PASSWORD      Secret — only Mars uses it, to start a trial (different from ADMIN_PASSWORD)
+//   YEAR_PRICE         Text   — optional: what one year costs in dollars (600 if not set)
 
 const LIMITS = { title: 80, note: 160, name: 40, email: 120, phone: 30 };
 // Photos: one per product (a new upload replaces the old one), JPG/PNG/WebP only,
 // 2 MB max each. owner.html shrinks photos to about 1200 px before sending, so most are 100-300 KB.
 const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
+// Free trial and yearly plan
+const DEFAULT_YEAR_PRICE = 600; // dollars; a YEAR_PRICE setting on the Worker overrides it
+const DAY = 864e5, TRIAL_DAYS = 30, GRACE_DAYS = 3, YEAR_DAYS = 365, TRIAL_WARN_DAYS = 7, RENEW_WARN_DAYS = 30;
 
 export default {
   async fetch(request, env, ctx) {
@@ -37,9 +62,9 @@ export default {
       const GET = request.method === 'GET', POST = request.method === 'POST';
 
       if (GET && path === '/store') {
-        const [settings, cfg] = await Promise.all([getSettings(env), loadConfig(env).catch(() => null)]);
+        const [settings, cfg, plan] = await Promise.all([getSettings(env), loadConfig(env).catch(() => null), getPlan(env).then(p => refreshPayments(env, p))]);
         const products = cfg ? cfg.products.map(p => ({ id: p.id, name: p.name, category: p.category, price: p.price })) : [];
-        return json({ ...settings, memberPercent: settings.memberPercent ?? cfg?.members?.percentOff ?? 0, store: cfg ? { name: cfg.store?.name, brandColor: cfg.store?.brandColor } : null, products }, 200, { 'Cache-Control': 'no-store' });
+        return json({ ...settings, memberPercent: settings.memberPercent ?? cfg?.members?.percentOff ?? 0, store: cfg ? { name: cfg.store?.name, brandColor: cfg.store?.brandColor } : null, products, ordering: ordering(plan) }, 200, { 'Cache-Control': 'no-store' });
       }
 
       if (POST && path === '/join') {
@@ -53,6 +78,130 @@ export default {
       }
 
       if (POST && path === '/checkout') return checkout(request, env, ctx);
+
+      // ----- Free trial, yearly plan and Stripe Connect -----
+      if (path.startsWith('/mars/')) {
+        if (!(await checkMars(request, env))) return json({ error: 'Wrong Mars password' }, 401);
+        const plan = await getPlan(env);
+        if (GET && path === '/mars/plan') return json({ plan, ...planState(plan) }, 200, { 'Cache-Control': 'no-store' });
+        if (POST && path === '/mars/activate') {
+          const b = await request.json().catch(() => ({}));
+          if (plan?.trialStart && !b.restart) return json({ error: 'The trial for this shop has already started', plan, ...planState(plan) }, 409);
+          const now = Date.now();
+          const next = { ...(plan || {}), trialStart: now, trialEnds: now + TRIAL_DAYS * DAY, signup: signupFrom(b, plan?.signup) };
+          await putPlan(env, next);
+          return json({ ok: true, plan: next, ...planState(next) });
+        }
+        if (POST && path === '/mars/plan') {
+          if (!plan?.trialStart) return json({ error: 'Start the trial first' }, 400);
+          const b = await request.json().catch(() => ({})), next = { ...plan };
+          for (const k of ['trialEnds', 'paidUntil']) {
+            if (!(k in b)) continue;
+            if (b[k] === null || b[k] === '') { delete next[k]; continue }
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(b[k])) return json({ error: k + ' must look like 2027-12-02' }, 400);
+            next[k] = Date.parse(b[k] + 'T23:59:59Z');
+          }
+          await putPlan(env, next);
+          return json({ ok: true, plan: next, ...planState(next) });
+        }
+        return json({ error: 'Not found' }, 404);
+      }
+
+      if (path === '/admin/plan' || path === '/admin/terms' || path.startsWith('/admin/plan/') || path.startsWith('/admin/payments/')) {
+        if (!(await checkPassword(request, env))) return denied();
+        const plan = await getPlan(env);
+        if (GET && path === '/admin/plan') return json(planForOwner(plan, env), 200, { 'Cache-Control': 'no-store' });
+        if (!plan?.trialStart) return json({ error: 'This shop has no free trial or plan yet' }, 400);
+
+        if (POST && path === '/admin/terms') {
+          const b = await request.json().catch(() => ({}));
+          if (b.agree !== true) return json({ error: 'Please tick the box to agree' }, 400);
+          const next = { ...plan, termsAgreedAt: plan.termsAgreedAt || Date.now() };
+          await putPlan(env, next);
+          return json(planForOwner(next, env));
+        }
+
+        if (POST && path === '/admin/plan/checkout') {
+          const price = yearPrice(env);
+          if (!(price > 0) || !env.STRIPE_SECRET_KEY || !env.SITE_URL) return json({ error: 'Signing up is not set up yet. Please contact Mars.' }, 500);
+          const b = await request.json().catch(() => ({}));
+          const signup = signupFrom(b, {});
+          if (!signup.name) return json({ error: 'Please add your name' }, 400);
+          if (!signup.business) return json({ error: 'Please add your business name' }, 400);
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(signup.email)) return json({ error: 'Please check your email address' }, 400);
+          if (b.agree !== true) return json({ error: 'Please tick the box to agree to the service agreement' }, 400);
+          const back = sameSite(b.returnUrl, env.SITE_URL);
+          if (!back) return json({ error: 'Bad return address' }, 400);
+          await putPlan(env, { ...plan, signup, agreedAt: Date.now() });
+          const form = new URLSearchParams();
+          form.set('mode', 'payment');
+          form.set('managed_payments[enabled]', 'false');
+          form.set('line_items[0][price_data][currency]', 'usd');
+          form.set('line_items[0][price_data][unit_amount]', String(Math.round(price * 100)));
+          form.set('line_items[0][price_data][product_data][name]', 'Shop app: one year');
+          form.set('line_items[0][price_data][product_data][description]', signup.business);
+          form.set('line_items[0][quantity]', '1');
+          form.set('customer_email', signup.email);
+          form.set('metadata[kind]', 'shop-year');
+          form.set('metadata[site]', env.SITE_URL);
+          form.set('metadata[business]', signup.business);
+          form.set('payment_intent_data[description]', 'Shop app, one year: ' + signup.business);
+          form.set('success_url', back + '?plan=paid&session={CHECKOUT_SESSION_ID}');
+          form.set('cancel_url', back + '?plan=cancel');
+          // Mars's own Stripe account (no Stripe-Account header), so the yearly fee goes to Mars.
+          const session = await stripe(env, '/checkout/sessions', { form });
+          return json({ url: session.url });
+        }
+
+        if (POST && path === '/admin/plan/confirm') {
+          const b = await request.json().catch(() => ({}));
+          const id = typeof b.session === 'string' ? b.session : '';
+          if (!/^cs_[\w]{8,200}$/.test(id)) return json({ error: 'Bad payment reference' }, 400);
+          if ((plan.paidSessions || []).some(p => p.id === id)) return json(planForOwner(plan, env));
+          const s = await stripe(env, '/checkout/sessions/' + id);
+          if (s.metadata?.kind !== 'shop-year' || s.metadata?.site !== env.SITE_URL) return json({ error: 'That payment is not for this shop' }, 400);
+          if (s.payment_status !== 'paid') return json({ error: 'The payment has not gone through yet. Please try again in a minute.' }, 409);
+          const now = Date.now(), from = Math.max(now, plan.trialEnds || 0, plan.paidUntil || 0);
+          const next = { ...plan, paidUntil: from + YEAR_DAYS * DAY, paidSessions: [...(plan.paidSessions || []), { id, at: now, amount: (s.amount_total || 0) / 100 }].slice(-20) };
+          await putPlan(env, next);
+          return json({ ...planForOwner(next, env), justPaid: true });
+        }
+
+        if (POST && path === '/admin/payments/session') {
+          if (!env.STRIPE_SECRET_KEY || !env.STRIPE_PUBLISHABLE_KEY) return json({ error: 'Payments set-up is not ready yet. Please contact Mars.' }, 500);
+          let account = plan.account;
+          if (!account) {
+            const form = new URLSearchParams();
+            // The shop gets its own full Stripe account and pays Stripe's fees itself; Stripe collects
+            // the sign-up details. Mars pays no Connect fees for accounts set up this way.
+            form.set('controller[stripe_dashboard][type]', 'full');
+            form.set('controller[fees][payer]', 'account');
+            form.set('controller[losses][payments]', 'stripe');
+            form.set('controller[requirement_collection]', 'stripe');
+            if (plan.signup?.email) form.set('email', plan.signup.email);
+            form.set('business_profile[url]', env.SITE_URL);
+            form.set('metadata[site]', env.SITE_URL);
+            const acct = await stripe(env, '/accounts', { form });
+            account = acct.id;
+            await putPlan(env, { ...plan, account });
+          }
+          const form = new URLSearchParams();
+          form.set('account', account);
+          form.set('components[account_onboarding][enabled]', 'true');
+          const sess = await stripe(env, '/account_sessions', { form });
+          return json({ clientSecret: sess.client_secret, publishableKey: env.STRIPE_PUBLISHABLE_KEY });
+        }
+
+        if (GET && path === '/admin/payments/status') {
+          if (!plan.account) return json({ connected: false, on: false });
+          const a = await stripe(env, '/accounts/' + plan.account);
+          const due = [...(a.requirements?.currently_due || []), ...(a.requirements?.past_due || [])];
+          const on = !!a.charges_enabled;
+          if (on !== !!plan.paymentsOn) await putPlan(env, { ...plan, paymentsOn: on });
+          return json({ connected: true, on, submitted: !!a.details_submitted, needsMore: due.length > 0, payouts: !!a.payouts_enabled, pending: !!a.requirements?.pending_verification?.length }, 200, { 'Cache-Control': 'no-store' });
+        }
+        return json({ error: 'Not found' }, 404);
+      }
 
       if (GET && path.startsWith('/photo/')) {
         const id = decodeURIComponent(path.slice(7));
@@ -165,6 +314,7 @@ export default {
 
       return json({ error: 'Not found' }, 404);
     } catch (err) {
+      if (err && err.stripe) return json({ error: 'Stripe: ' + err.message }, 502);
       return json({ error: 'Server error', detail: String(err && err.message || err) }, 500);
     }
   },
@@ -175,7 +325,13 @@ async function checkout(request, env, ctx) {
   if (!env.STRIPE_SECRET_KEY || !env.SITE_URL) return json({ error: 'Checkout is not set up yet' }, 500);
   const body = await request.json().catch(() => null);
   if (!body) return json({ error: 'Bad request' }, 400);
-  const [cfg, settings] = await Promise.all([loadConfig(env), getSettings(env)]);
+  const [cfg, settings, plan] = await Promise.all([loadConfig(env), getSettings(env), getPlan(env).then(p => refreshPayments(env, p))]);
+  // Once Mars starts a trial, card payments go to the shop's own Stripe account, and checkout
+  // pauses if the trial or paid year has run out (after the grace days).
+  const open = ordering(plan);
+  if (open === 'paused') return json({ error: 'Ordering is paused right now, please check back soon', ordering: open }, 403);
+  if (open === 'setup') return json({ error: 'This shop is still setting up card payments, please check back soon', ordering: open }, 403);
+  const account = plan?.trialStart ? plan.account : '';
   const byId = Object.fromEntries(cfg.products.map(p => [p.id, p]));
   const memberPercent = settings.memberPercent ?? cfg.members?.percentOff ?? 0;
 
@@ -225,7 +381,7 @@ async function checkout(request, env, ctx) {
 
   const res = await fetch('https://api.stripe.com/v1/checkout/sessions', {
     method: 'POST',
-    headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}`, 'Content-Type': 'application/x-www-form-urlencoded', ...(account ? { 'Stripe-Account': account } : {}) },
     body: form,
   });
   const session = await res.json();
@@ -261,6 +417,8 @@ function priceOf(p, settings, memberPercent, cfg, isMember) {
 // Only checkouts made by this shop app count (they carry metadata "fulfilment").
 async function salesStats(env, url) {
   if (!env.STRIPE_SECRET_KEY) return { error: 'Stripe is not connected yet' };
+  const plan = await getPlan(env), account = plan?.trialStart ? plan.account : '';
+  if (plan?.trialStart && !account) return { error: 'Sales show here once card payments are set up' };
   const days = [7, 30, 90].includes(Number(url.searchParams.get('days'))) ? Number(url.searchParams.get('days')) : 30;
   const tz = Math.max(-840, Math.min(840, Number(url.searchParams.get('tz')) || 0)); // owner's offset in minutes (from getTimezoneOffset)
   const dayOf = ms => new Date(ms - tz * 60000).toISOString().slice(0, 10);
@@ -275,7 +433,7 @@ async function salesStats(env, url) {
     const q = new URLSearchParams({ status: 'complete', limit: '100', 'created[gte]': String(Math.floor(since / 1000)) });
     q.append('expand[]', 'data.line_items');
     if (after) q.set('starting_after', after);
-    const res = await fetch('https://api.stripe.com/v1/checkout/sessions?' + q, { headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}` } });
+    const res = await fetch('https://api.stripe.com/v1/checkout/sessions?' + q, { headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}`, ...(account ? { 'Stripe-Account': account } : {}) } });
     const page = await res.json();
     if (!res.ok) return { error: page?.error?.message || 'Could not read sales from Stripe' };
     for (const s of page.data) { livemode ??= s.livemode; if (s.metadata?.fulfilment && s.payment_status === 'paid') sessions.push(s) }
@@ -327,6 +485,69 @@ async function salesStats(env, url) {
   };
 }
 
+// ---------- Free trial and yearly plan ----------
+async function getPlan(env) { return (await env.SHOP.get('plan', 'json')) || null }
+async function putPlan(env, plan) { await env.SHOP.put('plan', JSON.stringify({ ...plan, updated: Date.now() })) }
+// trial -> (paid) -> grace (3 days, still taking orders) -> paused. No plan record = not managed.
+function planState(plan, now = Date.now()) {
+  if (!plan?.trialStart) return { state: 'none' };
+  const trialEnds = plan.trialEnds || 0, paidUntil = plan.paidUntil || 0, endsAt = Math.max(trialEnds, paidUntil);
+  const pauseAt = endsAt + GRACE_DAYS * DAY;
+  let state = 'paused';
+  if (now <= endsAt) state = paidUntil && paidUntil > trialEnds ? 'paid' : 'trial';
+  else if (now <= pauseAt) state = 'grace';
+  const daysLeft = Math.max(0, Math.ceil((endsAt - now) / DAY)), graceLeft = state === 'grace' ? Math.max(1, Math.ceil((pauseAt - now) / DAY)) : 0;
+  const soon = state === 'trial' ? daysLeft <= TRIAL_WARN_DAYS : state === 'paid' ? daysLeft <= RENEW_WARN_DAYS : false;
+  return { state, trialStart: plan.trialStart, trialEnds, paidUntil: paidUntil || null, endsAt, pauseAt, daysLeft, graceLeft, soon };
+}
+// If the owner finished Stripe's sign-up but Stripe approved it later, notice without waiting for the
+// owner app: ask Stripe again, at most every 5 minutes, while card payments are still off.
+async function refreshPayments(env, plan) {
+  if (!plan?.trialStart || !plan.account || plan.paymentsOn || Date.now() - (plan.checkedAt || 0) < 5 * 60e3) return plan;
+  try {
+    const a = await stripe(env, '/accounts/' + plan.account);
+    const next = { ...plan, paymentsOn: !!a.charges_enabled, checkedAt: Date.now() };
+    await putPlan(env, next);
+    return next;
+  } catch { return plan }
+}
+function ordering(plan) {
+  if (!plan?.trialStart) return 'open';
+  if (planState(plan).state === 'paused') return 'paused';
+  return plan.account && plan.paymentsOn ? 'open' : 'setup';
+}
+function planForOwner(plan, env) {
+  const st = planState(plan);
+  if (st.state === 'none') return st;
+  return { ...st, yearPrice: yearPrice(env), termsAgreedAt: plan.termsAgreedAt || null, agreedAt: plan.agreedAt || null,
+    signup: plan.signup || {}, payments: { connected: !!plan.account, on: !!plan.paymentsOn }, ordering: ordering(plan) };
+}
+const yearPrice = env => Number(env.YEAR_PRICE) > 0 ? Number(env.YEAR_PRICE) : DEFAULT_YEAR_PRICE;
+function signupFrom(b, prev = {}) {
+  const pick = (k, max) => (typeof b?.[k] === 'string' ? clean(b[k], max) : prev?.[k] || '');
+  return { name: pick('name', 60), business: pick('business', 80), email: pick('email', LIMITS.email).toLowerCase(), phone: pick('phone', LIMITS.phone) };
+}
+// Only send the owner back to a page on the shop's own site.
+function sameSite(u, site) {
+  try { const a = new URL(u), b = new URL(site); return a.origin === b.origin && a.protocol === 'https:' || a.origin === b.origin && a.hostname === 'localhost' ? a.origin + a.pathname : '' } catch { return '' }
+}
+async function stripe(env, path, { form = null, account = '' } = {}) {
+  const headers = { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}` };
+  if (form) headers['Content-Type'] = 'application/x-www-form-urlencoded';
+  if (account) headers['Stripe-Account'] = account;
+  const res = await fetch('https://api.stripe.com/v1' + path, { method: form ? 'POST' : 'GET', headers, body: form || undefined });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) { const e = new Error(data?.error?.message || `error ${res.status}`); e.stripe = true; throw e }
+  return data;
+}
+async function checkMars(request, env) {
+  const real = env.MARS_PASSWORD || '';
+  if (!real) return false;
+  const ok = await sameText(request.headers.get('X-Mars-Password') || '', real);
+  if (!ok) await new Promise(r => setTimeout(r, 1000));
+  return ok;
+}
+
 // ---------- Helpers ----------
 let cached = null, cachedAt = 0;
 async function loadConfig(env) {
@@ -368,7 +589,7 @@ function cors() {
   return {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, X-Admin-Password',
+    'Access-Control-Allow-Headers': 'Content-Type, X-Admin-Password, X-Mars-Password',
     'Access-Control-Max-Age': '86400',
   };
 }

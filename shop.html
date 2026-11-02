@@ -579,8 +579,9 @@ function renderCart() {
     ${CFG.shipping?.enabled ? `<div class="row"><span>${fulfil === 'ship' ? 'Shipping' : 'Pickup'}</span><span>${t.ship ? money(t.ship) : 'Free'}</span></div>` : ''}
     <div class="row total"><span>Total</span><span>${money(t.total)}</span></div>
     ${!isMember() && CFG.members?.enabled && nonMember.sub < t.sub ? `<div class="nudge">Members would pay <b>${money(nonMember.total)}</b> for this cart. <button type="button" data-go="members">Join free</button></div>` : ''}
-    <button class="primary" type="button" id="checkout" style="width:100%;margin-top:14px">Checkout · ${money(t.total)}</button>
-    <p class="fine" id="checkout-note">${API ? 'Secure payment by Stripe.' : 'Practice mode: no card is charged.'} ${privacyLink()}</p>
+    ${ORDER_MSG[live.ordering] ? `<button class="primary" type="button" disabled style="width:100%;margin-top:14px">Checkout · ${money(t.total)}</button>
+    <p class="fine" id="checkout-note" style="color:var(--accent-text)">${ORDER_MSG[live.ordering]} ${privacyLink()}</p>` : `<button class="primary" type="button" id="checkout" style="width:100%;margin-top:14px">Checkout · ${money(t.total)}</button>
+    <p class="fine" id="checkout-note">${API ? 'Secure payment by Stripe.' : 'Practice mode: no card is charged.'} ${privacyLink()}</p>`}
   </div>`;
 }
 $('#view-cart').addEventListener('click', async e => {
@@ -592,6 +593,8 @@ $('#view-cart').addEventListener('click', async e => {
   if (e.target.closest('#checkout')) checkout(e.target.closest('#checkout'));
 });
 
+// When the shop's plan has run out (or card payments aren't set up yet), the Worker says so in /store.
+const ORDER_MSG = { paused: 'Ordering is paused right now, please check back soon. You can still browse and see your rewards.', setup: 'Card payments are being set up, please check back soon.' };
 async function checkout(btn) {
   if (!cart.length) return;
   const t = totals(), lines = cart.map(l => ({ ...l, price: priceOf(byId[l.id]).price }));
@@ -606,6 +609,7 @@ async function checkout(btn) {
     const res = await fetch(API + '/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ items: cart.map(({ id, size, qty }) => ({ id, size, qty })), fulfilment: fulfil, memberEmail: isMember() ? member.email : '', returnUrl: location.href.split(/[?#]/)[0] }) });
     const data = await res.json().catch(() => ({}));
+    if (data.ordering) { live.ordering = data.ordering; renderAll(); return }
     if (!res.ok || !data.url) throw new Error(data.error || 'Checkout is unavailable right now');
     try { sessionStorage.setItem(KEY + 'pending', JSON.stringify({ lines, total: t.total, spent: t.sub, fulfil })) } catch {}
     location.href = data.url;
@@ -794,7 +798,7 @@ renderAll();
 if (API) {
   live = { drop: null, sales: {}, memberPercent: CFG.members?.percentOff ?? 0, photos: {} };
   fetch(API + '/store', { cache: 'no-store' }).then(r => r.json()).then(d => {
-    if (d && !d.error) live = { drop: d.drop || null, sales: d.sales || {}, memberPercent: d.memberPercent ?? live.memberPercent, photos: d.photos || {} };
+    if (d && !d.error) live = { drop: d.drop || null, sales: d.sales || {}, memberPercent: d.memberPercent ?? live.memberPercent, photos: d.photos || {}, ordering: d.ordering || 'open' };
   }).catch(() => {}).finally(renderAll);
 }
 // Coming back from Stripe checkout.
