@@ -1,11 +1,11 @@
 # Shop template: setting up a new shop
 
-Three files make one shop:
+Three parts make one shop:
 
 | File | Who uses it | What it is |
 | --- | --- | --- |
 | `shop.html` | Customers | The phone app: shop, weekly drop, sales, cart, checkout, rewards card, members |
-| `owner.html` | The shop owner | Sign in to set the weekly drop, sale prices and member discount, and see members |
+| `owner/` folder | The shop owner | Sign in to set the weekly drop, sale prices and member discount, and see members |
 | `shop-worker.js` | Runs on Cloudflare | Checkout with Stripe, saves the owner's settings, keeps the member list |
 
 The app works on its own in **practice mode** (no Worker, no card charged), so you can demo it before any setup.
@@ -33,7 +33,7 @@ Open `shop.html` in a text editor. Everything you change is in the **SHOP SETTIN
 Prices live **only here**. The Worker reads this same block from the live page, so there is never a second price list to keep in sync.
 
 ## 2. Put it online
-Upload `shop.html` and `owner.html` to the shop's website, GitHub Pages works fine. Rename `shop.html` to `index.html` if it should be the home page. Note the full address of the shop page, for example `https://yourname.github.io/abc-shop/`.
+Upload `shop.html` and the `owner` folder (`owner/index.html`, `owner/manifest.webmanifest`, `owner/sw.js`) to the shop's website, GitHub Pages works fine. Rename `shop.html` to `index.html` if it should be the home page. Note the full address of the shop page, for example `https://yourname.github.io/abc-shop/`.
 
 ## 3. Create the Worker (free Cloudflare account)
 1. **KV storage:** Storage & Databases → KV → Create. Name it `<shop>-shop`.
@@ -47,12 +47,12 @@ Upload `shop.html` and `owner.html` to the shop's website, GitHub Pages works fi
 
 ## 4. Connect the pages
 - In `shop.html`, set `"api": "https://abc-shop.yourname.workers.dev"` in the settings block.
-- In `owner.html`, set `const SHOP_API = 'https://abc-shop.yourname.workers.dev';` near the top of the script.
+- In `owner/index.html`, set `const SHOP_API = 'https://abc-shop.yourname.workers.dev';` near the top of the script.
 
 Upload both again.
 
 ## 5. Test
-1. Open `owner.html` and sign in. Set a drop, put one item on sale, and save.
+1. Open the owner app (the `owner/` address, e.g. `https://yourname.github.io/abc-shop/owner/`) and sign in. Set a drop, put one item on sale, and save.
 2. Open the shop. The drop and the sale should be showing.
 3. Join as a member on the Members tab. Prices drop.
 4. Check out with Stripe's test card `4242 4242 4242 4242`, any future date, any CVC. You land back on "Order placed" with punches added, and the order shows in Stripe → Payments (test mode).
@@ -72,10 +72,10 @@ The customer always pays the **single lowest price they qualify for**: the regul
 Customers scan the QR sign in the shop, the app opens, and after a couple of seconds an **"Add Shop to your phone"** banner slides up. Android shows a one-tap **Install app** button; iPhone shows the Share → Add to Home Screen steps (Apple doesn't allow an install button). Once installed, the shop icon sits on their home screen and opens full-screen like a normal app. No app store.
 
 These files make that work. Upload them **all to the main folder** of the site, next to `shop.html` (not in a subfolder):
-- `manifest.webmanifest`: the app's name ("Shop"), colors and icons. Change `name`/`short_name` for a real shop (keep `short_name` 12 characters or less).
+- `manifest.webmanifest`: the app's name ("Shop"), colors and icons. Its `scope` is `./shop.html` on purpose, so the shop app doesn't swallow the owner app; keep it that way (use `./index.html` if you renamed the shop page). Change `name`/`short_name` for a real shop (keep `short_name` 12 characters or less).
 - `sw.js`: tells Android the site is an app. It caches nothing, so customers always see current prices and deals. Don't edit it.
 - `icon-192.png`, `icon-512.png`, `icon-maskable-512.png`, `apple-touch-icon.png`: the home-screen icon. For a real shop, replace them with its logo at the same sizes.
-- `owner.webmanifest`, `owner-icon-192.png`, `owner-icon-512.png`, `owner-icon-maskable-512.png`, `owner-apple-touch-icon.png`: the same for `owner.html`, so the owner can add their owner page to the home screen as its own **Shop Owner** app with a gold key icon (iPhone: Safari → Share → Add to Home Screen; Android: Chrome → Install app). For a real shop, change `name` in `owner.webmanifest` and `apple-mobile-web-app-title` in `owner.html` to the shop's name plus "Owner".
+- `owner-icon-192.png`, `owner-icon-512.png`, `owner-icon-maskable-512.png`, `owner-apple-touch-icon.png` (main folder) plus the `owner` folder's `manifest.webmanifest` and `sw.js`: the owner's own home-screen app, **Shop Owner**, with a gold key icon. It lives in its own folder so phones treat it as a separate app from the shop. To install it, open the `owner/` address in Safari (iPhone: Share → Add to Home Screen) or Chrome (Android: ⋮ → Install app). For a real shop, change `name` in `owner/manifest.webmanifest` and `apple-mobile-web-app-title` in `owner/index.html` to the shop's name plus "Owner". The old `owner.html` just forwards to `owner/`.
 - `qr-sign.pdf` (print this), `qr-sign.png`, `qr-code.png`: the QR code points to `https://celyum909-cyber.github.io/shop-demo/`. Make a new one if the address changes; a printed code can't be edited.
 
 The banner is built into `shop.html`. Tapping X hides it for 3 days, and the Help tab has a **Show me how on this phone** button that brings it back any time.

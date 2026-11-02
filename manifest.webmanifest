@@ -4,7 +4,7 @@
   "description": "Shop, member prices, weekly drops and your rewards card.",
   "id": "./shop.html",
   "start_url": "./shop.html",
-  "scope": "./",
+  "scope": "./shop.html",
   "display": "standalone",
   "background_color": "#072448",
   "theme_color": "#072448",
