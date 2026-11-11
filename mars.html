@@ -68,7 +68,7 @@ dt{color:var(--muted)}dd{margin:0;font-weight:600}
 </main>
 <script>
 'use strict';
-const SHOP_API = ''; // your Worker address, e.g. 'https://abc-shop.yourname.workers.dev'
+const SHOP_API = 'https://shop-demo.celyum909.workers.dev';
 const $ = s => document.querySelector(s);
 const say = (el, t, ok) => { el.textContent = t; el.className = 'msg ' + (ok ? 'ok' : 'bad') };
 const day = ms => ms ? new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '–';
