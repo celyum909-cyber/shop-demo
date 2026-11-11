@@ -6,7 +6,7 @@
 <title>Mars · shop plan</title>
 <meta name="robots" content="noindex">
 <!--
-  MARS ONLY: start a shop's 30-day free trial at hand-over, check its dates, or record a payment by hand.
+  MARS ONLY: activate a shop's free tier at hand-over, check its plan, or set Pro by hand (e.g. a cash payment).
   Uses MARS_PASSWORD (set in the shop's Cloudflare Worker), never the owner's password.
   Set SHOP_API below to the same Worker address as in shop.html and owner/index.html.
 -->
@@ -30,12 +30,14 @@ button:disabled{opacity:.55}
 dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:6px 0 0;font-size:14px}
 dt{color:var(--muted)}dd{margin:0;font-weight:600}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.check{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:14px;font-weight:500}
+.check input{width:20px;height:20px;accent-color:var(--brand)}
 </style>
 </head>
 <body>
 <main>
   <h1>Shop plan</h1>
-  <p class="sub">For Mars only. Start the free trial when you hand the app over.</p>
+  <p class="sub">For Mars only. Activate the free tier when you hand the app over.</p>
 
   <section class="card">
     <label for="pw">Mars password</label>
@@ -46,26 +48,27 @@ dt{color:var(--muted)}dd{margin:0;font-weight:600}
   </section>
 
   <form class="card" id="start">
-    <h2>Start the 30-day free trial</h2>
-    <p class="sub">These details fill in the owner's Keep your app form later. The owner agrees to the trial terms the first time they open the owner app.</p>
+    <h2>Activate the free tier</h2>
+    <p class="sub">These details fill in the owner's Upgrade to Pro form later. The owner agrees to the terms the first time they open the owner app. Every order already carries the free-tier processing fee, so there's nothing else to turn on.</p>
     <label for="name">Owner's name</label><input id="name" maxlength="60">
     <label for="biz">Business name</label><input id="biz" maxlength="80">
     <div class="two"><div><label for="email">Email</label><input id="email" type="email" maxlength="120"></div><div><label for="phone">Phone</label><input id="phone" type="tel" maxlength="30"></div></div>
-    <button type="submit">Start free trial</button>
+    <button type="submit">Activate free tier</button>
     <p class="msg" id="start-msg" aria-live="polite"></p>
   </form>
 
-  <form class="card" id="dates">
-    <h2>Change dates by hand</h2>
-    <p class="sub">For a payment made in cash or by check, set the paid-through date. Leave a box empty to keep it as it is.</p>
-    <div class="two"><div><label for="paid">Paid through</label><input id="paid" type="date"></div><div><label for="trial">Trial ends</label><input id="trial" type="date"></div></div>
-    <button type="submit" class="alt">Save dates</button>
-    <p class="msg" id="dates-msg" aria-live="polite"></p>
+  <form class="card" id="pro">
+    <h2>Set Pro by hand</h2>
+    <p class="sub">For a Pro payment taken in cash or by check, turn Pro on and set when it's paid through. Leave the date empty to turn Pro on with no end date, or untick Pro and save to turn it off.</p>
+    <label class="check"><input type="checkbox" id="pro-on" checked> Pro is on for this shop</label>
+    <label for="pro-until">Pro paid through</label><input id="pro-until" type="date">
+    <button type="submit" class="alt">Save Pro status</button>
+    <p class="msg" id="pro-msg" aria-live="polite"></p>
   </form>
 </main>
 <script>
 'use strict';
-const SHOP_API = 'https://shop-demo.celyum909.workers.dev';
+const SHOP_API = ''; // your Worker address, e.g. 'https://abc-shop.yourname.workers.dev'
 const $ = s => document.querySelector(s);
 const say = (el, t, ok) => { el.textContent = t; el.className = 'msg ' + (ok ? 'ok' : 'bad') };
 const day = ms => ms ? new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '–';
@@ -79,31 +82,31 @@ async function call(path, body) {
   if (!res.ok) throw Object.assign(new Error(d.error || `Error ${res.status}`), { data: d });
   return d;
 }
-const LABEL = { none: 'No trial started', trial: 'Free trial', paid: 'Paid', grace: 'Grace days (still taking orders)', paused: 'Checkout paused' };
+const LABEL = { none: 'Not activated', free: 'Free tier', pro: 'Pro' };
 function show(d) {
   const p = d.plan || {}, s = p.signup || {}, f = $('#facts');
   f.hidden = false;
-  f.innerHTML = [['State', LABEL[d.state] || d.state], ['Trial started', day(p.trialStart)], ['Trial ends', day(p.trialEnds)], ['Paid through', day(p.paidUntil)], ['Checkout pauses', d.pauseAt ? day(d.pauseAt) : '–'],
-    ['Owner agreed to trial terms', day(p.termsAgreedAt)], ['Card payments', p.account ? (p.paymentsOn ? 'On' : 'Set-up started') : 'Not set up'], ['Owner', [s.name, s.business].filter(Boolean).join(', ') || '–'], ['Email', s.email || '–']]
+  f.innerHTML = [['State', LABEL[d.state] || d.state], ['Activated', day(p.activatedAt)], ['Pro paid through', d.proCurrentPeriodEnd ? day(d.proCurrentPeriodEnd) : '–'],
+    ['Owner agreed to terms', day(p.termsAgreedAt)], ['Card payments', p.account ? (p.paymentsOn ? 'On' : 'Set-up started') : 'Not set up'], ['Owner', [s.name, s.business].filter(Boolean).join(', ') || '–'], ['Email', s.email || '–']]
     .map(([k, v]) => `<dt>${k}</dt><dd>${String(v).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))}</dd>`).join('');
+  if (d.proCurrentPeriodEnd) $('#pro-until').value = new Date(d.proCurrentPeriodEnd).toISOString().slice(0, 10);
+  $('#pro-on').checked = d.state === 'pro';
 }
 $('#look').onclick = async () => { const m = $('#look-msg'); say(m, 'Checking…', true); try { show(await call('/mars/plan')); say(m, '') } catch (e) { say(m, e.message) } };
 $('#start').addEventListener('submit', async e => {
   e.preventDefault(); const m = $('#start-msg');
   const body = { name: $('#name').value, business: $('#biz').value, email: $('#email').value, phone: $('#phone').value };
-  try { show(await call('/mars/activate', body)); say(m, 'Trial started. It ends in 30 days.', true) }
+  try { show(await call('/mars/activate', body)); say(m, 'Free tier activated.', true) }
   catch (err) {
-    if (err.data?.plan && confirm('This shop already has a trial. Start a new 30-day trial from today?')) {
-      try { show(await call('/mars/activate', { ...body, restart: true })); say(m, 'New 30-day trial started.', true) } catch (e2) { say(m, e2.message) }
+    if (err.data?.plan && confirm('This shop is already active. Re-send the owner\'s details?')) {
+      try { show(await call('/mars/activate', { ...body, restart: true })); say(m, 'Details updated.', true) } catch (e2) { say(m, e2.message) }
     } else say(m, err.message);
   }
 });
-$('#dates').addEventListener('submit', async e => {
-  e.preventDefault(); const m = $('#dates-msg'), body = {};
-  if ($('#paid').value) body.paidUntil = $('#paid').value;
-  if ($('#trial').value) body.trialEnds = $('#trial').value;
-  if (!Object.keys(body).length) return say(m, 'Pick a date first.');
-  try { show(await call('/mars/plan', body)); say(m, 'Dates saved.', true) } catch (err) { say(m, err.message) }
+$('#pro').addEventListener('submit', async e => {
+  e.preventDefault(); const m = $('#pro-msg'), body = { pro: $('#pro-on').checked };
+  body.proCurrentPeriodEnd = $('#pro-until').value || null;
+  try { show(await call('/mars/plan', body)); say(m, 'Pro status saved.', true) } catch (err) { say(m, err.message) }
 });
 </script>
 </body>
