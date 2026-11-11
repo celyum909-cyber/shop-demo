@@ -117,7 +117,7 @@ input[type=text],input[type=password],input[type=number],input[type=date],select
 :root[data-theme="dark"] .chart .bar,:root[data-theme="dark"] .top li i em{fill:color-mix(in srgb,var(--brand) 55%,#fff);background:color-mix(in srgb,var(--brand) 55%,#fff)}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .chart .bar,:root:not([data-theme="light"]) .top li i em{fill:color-mix(in srgb,var(--brand) 55%,#fff);background:color-mix(in srgb,var(--brand) 55%,#fff)}}
 
-/* ----- Free trial, Keep your app, payments ----- */
+/* ----- Free tier, Pro subscription, payments ----- */
 .plan{border-radius:16px;padding:14px 16px;margin-top:16px;border:1px solid var(--line);background:var(--panel);display:grid;gap:10px}
 .plan h2{margin:0;font-size:16px}
 .plan p{margin:2px 0 0;color:var(--muted);font-size:13.5px}
@@ -172,7 +172,7 @@ input[type=text],input[type=password],input[type=number],input[type=date],select
   <section id="dash" class="hidden">
     <header><div><h1 id="dash-title">Your shop</h1><small>Changes show in the app right away</small></div><div style="display:flex;gap:8px;align-items:center"><button class="theme-btn" id="theme-btn" type="button" aria-label="Switch to dark mode"><svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/></svg><svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button><button class="out" id="signout" type="button">Sign out</button></div></header>
 
-    <!-- Free trial / paid year, and card payments (only shown once Mars has started a trial) -->
+    <!-- Free / Pro plan, and card payments (only shown once Mars has activated this shop) -->
     <section id="plan-card" class="plan hidden" aria-live="polite"></section>
     <section id="pay-card" class="plan hidden" aria-live="polite"></section>
 
@@ -228,36 +228,35 @@ input[type=text],input[type=password],input[type=number],input[type=date],select
   </section>
 </div>
 
-<!-- Trial terms: shown once, before the free trial is used -->
+<!-- Terms: shown once, before the owner starts using the paid-upgrade and payments features -->
 <div class="sheet hidden" id="terms-sheet" role="dialog" aria-modal="true" aria-labelledby="terms-h">
   <form class="card" id="terms-form">
-    <h2 id="terms-h">Your free trial</h2>
-    <p>Your shop app is free for 30 days. Before you start, please read the trial terms:</p>
+    <h2 id="terms-h">Before you start</h2>
+    <p>Your shop app is free to use. A few quick things to agree to first:</p>
     <ul class="terms-list">
-      <li>The trial is free and provided as is, with no promises about uptime, sales or results.</li>
-      <li>We aren't responsible for lost sales, lost data or other losses during the free trial.</li>
+      <li>The app is provided as is, with no promises about uptime, sales or results.</li>
       <li>You're responsible for your own products, prices, refunds, taxes and customer service.</li>
-      <li>Either of us can stop the trial at any time.</li>
-      <li>If you keep the app, the service agreement replaces these trial terms.</li>
+      <li>Every order carries a small processing fee on top of Stripe's own card fee, shown as one rate at checkout. Either of us can change how the app is offered going forward.</li>
+      <li>Upgrading to Pro adds features and lowers that processing fee; it's billed monthly and you can cancel any time.</li>
     </ul>
-    <label class="check"><input type="checkbox" id="terms-ok"> <span>I agree to the <a href="../terms.html#trial" target="_blank" rel="noopener">trial terms</a> and have read the <a href="../terms.html#privacy" target="_blank" rel="noopener">privacy notice</a></span></label>
-    <div class="btns"><button class="primary" type="submit">Start my free trial</button></div>
+    <label class="check"><input type="checkbox" id="terms-ok"> <span>I agree to the <a href="../terms.html#terms" target="_blank" rel="noopener">terms</a> and have read the <a href="../terms.html#privacy" target="_blank" rel="noopener">privacy notice</a></span></label>
+    <div class="btns"><button class="primary" type="submit">Agree and continue</button></div>
     <p class="msg" id="terms-msg" aria-live="polite"></p>
   </form>
 </div>
 
-<!-- Keep your app: sign up and pay for one year -->
-<div class="sheet hidden" id="keep-sheet" role="dialog" aria-modal="true" aria-labelledby="keep-h">
-  <form class="card" id="keep-form">
-    <h2 id="keep-h">Keep your app</h2>
-    <p>Everything stays as it is: your products, photos, members, punch cards and sales.</p>
+<!-- Upgrade to Pro: monthly subscription -->
+<div class="sheet hidden" id="pro-sheet" role="dialog" aria-modal="true" aria-labelledby="pro-h">
+  <form class="card" id="pro-form">
+    <h2 id="pro-h">Upgrade to Pro</h2>
+    <p>Lowers your processing fee and unlocks Pro features as they ship. Cancel any time.</p>
     <label for="k-name">Your name</label><input id="k-name" type="text" maxlength="60" autocomplete="name" required>
     <label for="k-biz">Business name</label><input id="k-biz" type="text" maxlength="80" autocomplete="organization" required>
     <label for="k-email">Email (for your receipt)</label><input id="k-email" type="email" maxlength="120" autocomplete="email" required>
     <label for="k-phone">Phone</label><input id="k-phone" type="tel" maxlength="30" autocomplete="tel">
     <p class="price-line" id="k-price"></p>
-    <label class="check"><input type="checkbox" id="k-agree"> <span>I agree to the <a href="../terms.html#service" target="_blank" rel="noopener">service agreement</a></span></label>
-    <div class="btns"><button class="primary" type="submit" id="k-pay">Pay for one year</button><button class="secondary" type="button" data-close>Not now</button></div>
+    <label class="check"><input type="checkbox" id="k-agree"> <span>I agree to the <a href="../terms.html#pro" target="_blank" rel="noopener">Pro terms</a></span></label>
+    <div class="btns"><button class="primary" type="submit" id="k-pay">Upgrade to Pro</button><button class="secondary" type="button" data-close>Not now</button></div>
     <p class="msg" id="k-msg" aria-live="polite"></p>
   </form>
 </div>
@@ -274,7 +273,7 @@ input[type=text],input[type=password],input[type=number],input[type=date],select
 <script>
 'use strict';
 // The address of this shop's Cloudflare Worker (same as "api" in shop.html).
-const SHOP_API = 'https://shop-demo.celyum909.workers.dev';
+const SHOP_API = '';
 
 const $ = s => document.querySelector(s);
 const PW_KEY = 'shop-owner-pw';
@@ -321,8 +320,8 @@ async function loadAll() {
   try { const m = await api('/admin/members', { method: 'GET' }); members = m.members || []; renderMembers() } catch (e) { say($('#m-msg'), e.message) }
 }
 
-// ----- Free trial, Keep your app, card payments -----
-// Only shows once Mars has started a trial for this shop (the Worker keeps a "plan" record).
+// ----- Free tier, Pro subscription, card payments -----
+// Only shows once Mars has activated this shop (the Worker keeps a "plan" record).
 let plan = null, payStatus = null, alertNote = '';
 const longDate = ms => new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 const whole = n => '$' + Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 });
@@ -342,64 +341,61 @@ async function loadPlan() {
 }
 
 function renderPlan(note) {
-  const c = $('#plan-card'), p = plan, d = p.daysLeft, days = d === 1 ? '1 day' : d + ' days';
-  const keep = label => `<button class="primary" type="button" data-keep>${label}</button>`;
+  const c = $('#plan-card'), p = plan;
+  const upgrade = label => `<button class="primary" type="button" data-upgrade>${label}</button>`;
+  const cancel = `<button class="link" type="button" data-cancel>Cancel Pro</button>`;
   let cls = '', html = '';
-  if (note) { cls = 'green'; html = `<div><h2>Thank you, your app is kept</h2><p>${esc(note)}</p></div>` }
-  else if (p.state === 'trial') {
-    cls = p.soon ? 'gold' : '';
-    html = p.soon
-      ? `<div><h2>Your free trial ends in ${days}</h2><p>Keep your app to keep your shop open. Nothing needs moving over.</p></div>${keep('Keep your app')}`
-      : `<div><h2>Free trial · ${days} left</h2><p>Ends ${longDate(p.endsAt)}. Keep it any time: your paid year starts when the trial ends.</p></div>${keep('Keep your app')}`;
-  } else if (p.state === 'paid') {
+  if (note) { cls = 'green'; html = `<div><h2>You're on Pro</h2><p>${esc(note)}</p></div>` }
+  else if (p.state === 'pro') {
     cls = p.soon ? 'gold' : 'green';
-    html = p.soon
-      ? `<div><h2>Your year ends in ${days}</h2><p>Renew to keep your shop open after ${longDate(p.endsAt)}.</p></div>${keep('Renew for one year')}`
-      : `<div><h2>Your app is kept</h2><p>Paid through ${longDate(p.endsAt)}.</p></div>`;
-  } else if (p.state === 'grace') {
-    cls = 'red';
-    const g = p.graceLeft === 1 ? '1 day' : p.graceLeft + ' days';
-    html = `<div><h2>${p.paidUntil ? 'Your paid year has ended' : 'Your free trial has ended'}</h2><p>Checkout pauses in ${g}. Your shop is still taking orders until then.</p></div>${keep(p.paidUntil ? 'Renew for one year' : 'Keep your app')}`;
-  } else if (p.state === 'paused') {
-    cls = 'red';
-    html = `<div><h2>Ordering is paused</h2><p>Customers can still browse, but can't check out. Everything is saved, and ordering comes back as soon as you pay.</p></div>${keep(p.paidUntil ? 'Renew for one year' : 'Keep your app')}`;
+    const until = p.proCurrentPeriodEnd ? ` Renews ${longDate(p.proCurrentPeriodEnd)}.` : '';
+    html = `<div><h2>You're on Pro</h2><p>Your processing fee is lower, and Pro features unlock here as they ship.${until}</p></div>${cancel}`;
+  } else {
+    html = `<div><h2>Free plan</h2><p>Your app is free to use. Orders carry a small processing fee that funds it. Upgrade to Pro for a lower fee and more features.</p></div>${upgrade('Upgrade to Pro')}`;
   }
   c.className = 'plan ' + cls; c.innerHTML = html;
   if (alertNote) { c.insertAdjacentHTML('beforeend', `<p class="msg bad">We couldn't confirm your payment yet: ${esc(alertNote)} If you were charged, it will show here soon, or contact Mars.</p>`); alertNote = '' }
 }
-$('#plan-card').addEventListener('click', e => { if (e.target.closest('[data-keep]')) openKeep() });
+$('#plan-card').addEventListener('click', e => {
+  if (e.target.closest('[data-upgrade]')) openPro();
+  if (e.target.closest('[data-cancel]')) cancelPro();
+});
 
-function openKeep() {
+function openPro() {
   const s = plan.signup || {};
   $('#k-name').value ||= s.name || ''; $('#k-biz').value ||= s.business || (state?.store?.name || ''); $('#k-email').value ||= s.email || ''; $('#k-phone').value ||= s.phone || '';
-  const starts = Math.max(Date.now(), plan.endsAt);
-  $('#k-price').innerHTML = plan.yearPrice
-    ? `<b>${whole(plan.yearPrice)}</b> for one year, through ${longDate(starts + 365 * 864e5)}.${plan.state === 'trial' ? ' Your year starts when the free trial ends, so you lose no free days.' : ''}`
-    : 'The yearly price isn\'t set yet. Please contact Mars.';
-  $('#k-pay').textContent = plan.yearPrice ? `Pay ${whole(plan.yearPrice)} for one year` : 'Pay for one year';
-  say($('#k-msg'), ''); openSheet('#keep-sheet');
+  $('#k-price').innerHTML = plan.proPrice
+    ? `<b>${whole(plan.proPrice)}</b> a month. Cancel any time; it stops at the end of the billing period you've already paid for.`
+    : 'The Pro price isn\'t set yet. Please contact Mars.';
+  $('#k-pay').textContent = plan.proPrice ? `Upgrade for ${whole(plan.proPrice)}/month` : 'Upgrade to Pro';
+  say($('#k-msg'), ''); openSheet('#pro-sheet');
 }
-$('#keep-form').addEventListener('submit', async e => {
+$('#pro-form').addEventListener('submit', async e => {
   e.preventDefault();
   const msg = $('#k-msg'), btn = $('#k-pay');
-  if (!$('#k-agree').checked) return say(msg, 'Please tick the box to agree to the service agreement.');
+  if (!$('#k-agree').checked) return say(msg, 'Please tick the box to agree to the Pro terms.');
   btn.disabled = true; say(msg, 'Opening secure payment…', true);
   try {
     const d = await api('/admin/plan/checkout', { method: 'POST', body: JSON.stringify({ name: $('#k-name').value, business: $('#k-biz').value, email: $('#k-email').value, phone: $('#k-phone').value, agree: true, returnUrl: backTo() }) });
     location.href = d.url;
   } catch (err) { btn.disabled = false; if (err.auth) { clearPw(); location.reload() } else say(msg, err.message) }
 });
+async function cancelPro() {
+  if (!confirm("Cancel Pro? It stays active until the end of the period you've already paid for, then you're back on the free plan.")) return;
+  try { plan = await api('/admin/plan/cancel', { method: 'POST', body: '{}' }); renderPlan() }
+  catch (err) { if (err.auth) { clearPw(); location.reload() } else alert(err.message) }
+}
 
-// Coming back from Stripe after paying for the year.
+// Coming back from Stripe after subscribing to Pro.
 async function afterReturn() {
   const q = new URLSearchParams(location.search), what = q.get('plan');
   if (!what) return;
   history.replaceState(null, '', backTo());
-  if (what !== 'paid' || !q.get('session')) return;
+  if (what !== 'pro' || !q.get('session')) return;
   for (let i = 0; i < 4; i++) {
     try {
       plan = await api('/admin/plan/confirm', { method: 'POST', body: JSON.stringify({ session: q.get('session') }) });
-      return `Paid through ${longDate(plan.endsAt)}. Stripe is emailing your receipt.`;
+      return `Stripe is emailing your receipt.`;
     } catch (err) { if (i === 3) { alertNote = err.message; return } await new Promise(r => setTimeout(r, 2500)) }
   }
 }
@@ -419,7 +415,7 @@ const GUIDE = `<details class="guide"><summary>Getting paid: how setting up paym
   <h3>The steps</h3>
   <ol><li>Tap <b>Set up payments</b>. Stripe's form opens right here in the app.</li><li>Sign in to Stripe or create your Stripe login (Stripe may text you a code).</li><li>Pick your business type: just you (individual or sole proprietor), or a company or LLC.</li><li>Enter your personal details. Stripe uses them to confirm it's really you.</li><li>Describe the business: what you sell, and the name customers will see on their card statement. Your shop app's address works as your website.</li><li>Add the bank account where your sales should land.</li><li>Check everything and agree to Stripe's terms.</li></ol>
   <h3>What happens next</h3>
-  <ul><li>Most shops are approved within minutes. If Stripe needs more, you'll see <b>Finish setting up</b> here.</li><li>Once approved, this card turns green and customers can pay by card.</li><li>Stripe usually holds your very first payout a little longer while it gets to know a new account. After that, money arrives in your bank on a regular schedule.</li><li>Stripe's card fees come out of each sale. Refunds and payouts are in your own Stripe dashboard.</li></ul>
+  <ul><li>Most shops are approved within minutes. If Stripe needs more, you'll see <b>Finish setting up</b> here.</li><li>Once approved, this card turns green and customers can pay by card.</li><li>Stripe usually holds your very first payout a little longer while it gets to know a new account. After that, money arrives in your bank on a regular schedule.</li><li>Stripe's card fees, plus the small processing fee shown on the free/Pro card above, come out of each sale automatically. Refunds and payouts are in your own Stripe dashboard.</li></ul>
   <p>You can stop partway and pick up where you left off. Stripe only asks for what applies to your business, so you may not see every item above.</p>
 </details>`;
 function renderPay() {
