@@ -146,7 +146,7 @@ a{color:var(--link)}
 </main>
 <script>
 // Fill these in once.
-const PROVIDER = { name: 'Celyum Digital Solutions', email: '', state: '', effective: '', reviewed: false };
+const PROVIDER = { name: 'Celyum Digital Solutions', email: 'marcelo@celyumdigitalsolutions.com', state: 'New York', effective: '2026-11-12', reviewed: false };
 (function () { try { const t = localStorage.getItem('shop-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t } catch (e) {} })();
 const set = (f, v) => document.querySelectorAll(`[data-f="${f}"]`).forEach(el => { el.textContent = v });
 if (PROVIDER.name) { set('provider', PROVIDER.name); document.title = `Terms for shop owners · ${PROVIDER.name}` }
