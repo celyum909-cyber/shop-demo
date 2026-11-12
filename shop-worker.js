@@ -4,7 +4,8 @@
 //   GET  /store            -> this week's drop, sale prices, member discount, product list (public)
 //   POST /join             -> adds a customer to the member list
 //   POST /checkout         -> builds a Stripe checkout page from the cart and returns its address
-//   POST /login            -> checks the owner password (owner.html)
+//   POST /login            -> checks the owner password; says if they still need to pick their own
+//   POST /admin/password   -> sets the owner's own password (first sign-in) or changes it
 //   POST /admin/settings   -> saves the drop, sale prices and member discount (password required)
 //   GET  /admin/members    -> the member list (password required)
 //   POST /admin/member/remove -> deletes one member, e.g. when they ask (password required)
@@ -12,44 +13,59 @@
 //   POST /admin/photo      -> uploads or removes a product photo (password required)
 //   GET  /photo/<id>       -> a product photo (public)
 //
-// Free trial, the yearly plan and Stripe Connect (owner app):
-//   GET  /admin/plan       -> trial / paid dates, state and sign-up details (password required)
-//   POST /admin/terms      -> records that the owner agreed to the trial terms (password required)
-//   POST /admin/plan/checkout -> "Keep your app": saves sign-up details, returns a Stripe page for one year
-//   POST /admin/plan/confirm  -> after paying: checks with Stripe, then moves the paid-through date
+// Free tier, Pro subscription and Stripe Connect (owner app):
+//   GET  /admin/plan       -> free/pro status and sign-up details (password required)
+//   POST /admin/terms      -> records that the owner agreed to the terms (password required)
+//   POST /admin/plan/checkout -> "Upgrade to Pro": saves sign-up details, returns a Stripe page for
+//                             a monthly Pro subscription
+//   POST /admin/plan/confirm  -> after paying: checks with Stripe, then turns Pro on
+//   POST /admin/plan/cancel   -> cancels Pro at the end of the current billing period
 //   POST /admin/payments/session -> creates the shop's own Stripe account (first time) and opens
 //                             Stripe's sign-up form inside the owner app
 //   GET  /admin/payments/status  -> asks Stripe whether the shop can take card payments yet
 // Mars only (X-Mars-Password header):
 //   GET  /mars/plan        -> this shop's plan record and state
-//   POST /mars/activate    -> starts the 30-day free trial (body: name, business, email, phone)
-//   POST /mars/plan        -> changes dates by hand, e.g. { "paidUntil": "2027-12-02" } for a cash payment
+//   POST /mars/activate    -> turns the free tier on for this shop (body: name, business, email, phone)
+//   POST /mars/owner-password/reset -> clears the owner's own password so the setup code works again
+//   POST /mars/plan        -> sets Pro by hand, e.g. { "pro": true, "proCurrentPeriodEnd": "2027-12-02" }
+//                             for a cash payment, or { "pro": false } to turn it off
 //
-// A shop with no trial started (no "plan" record) works exactly as before: checkout uses
-// STRIPE_SECRET_KEY directly. Once Mars starts the trial, card payments go to the shop's own
-// connected Stripe account, and checkout pauses 3 days after the trial or paid year runs out.
+// Every order that goes through a shop's connected Stripe account carries a small processing cut
+// (Stripe's own application_fee_amount), taken automatically out of the charge before the rest
+// settles to the shop's bank. That cut is what pays for the free tier. A shop on Pro pays a lower
+// cut (PRO_FEE_PERCENT, 0 by default) instead of the free-tier cut (FREE_FEE_PERCENT).
+//
+// A shop with no plan record at all (never activated by Mars) works exactly as before: checkout
+// uses STRIPE_SECRET_KEY directly, with no connected account and no cut.
 //
 // Products and regular prices are read from the shop's own page (the "shop-config" block in
 // shop.html), so prices only ever live in one place and customers can't change what they pay.
 //
 // Cloudflare settings this Worker needs (Settings → Bindings / Variables and Secrets):
 //   SHOP               KV namespace binding (variable name exactly SHOP)
-//   ADMIN_PASSWORD     Secret — the owner's password (never put it in any file)
+//   ADMIN_PASSWORD     Secret — the owner's one-time setup code. They sign in with it once and pick their
+//                      own password (stored hashed in KV); after that the setup code stops working.
 //   STRIPE_SECRET_KEY  Secret — sk_test_... while practicing, sk_live_... for real orders
 //   SITE_URL           Text   — the full address of shop.html, e.g. https://yourshop.com/shop.html
-// For the free trial and yearly plan (only needed once Mars starts a trial):
+// For the free tier, Pro subscription and Stripe Connect (only needed once Mars activates a shop):
 //   STRIPE_SECRET_KEY  becomes Mars's own key (the same in every shop's Worker), with Connect switched on
 //   STRIPE_PUBLISHABLE_KEY Text — Mars's pk_test_... / pk_live_... (shows Stripe's sign-up form in the app)
-//   MARS_PASSWORD      Secret — only Mars uses it, to start a trial (different from ADMIN_PASSWORD)
-//   YEAR_PRICE         Text   — optional: what one year costs in dollars (600 if not set)
+//   MARS_PASSWORD      Secret — only Mars uses it, to activate a shop (different from ADMIN_PASSWORD)
+//   PRO_PRICE          Text   — optional: what Pro costs per month in dollars (39 if not set)
+//   FREE_FEE_PERCENT   Text   — optional: the free-tier processing cut, as a percent (0.5 if not set)
+//   PRO_FEE_PERCENT    Text   — optional: the Pro processing cut, as a percent (0 if not set)
 
 const LIMITS = { title: 80, note: 160, name: 40, email: 120, phone: 30 };
 // Photos: one per product (a new upload replaces the old one), JPG/PNG/WebP only,
 // 2 MB max each. owner.html shrinks photos to about 1200 px before sending, so most are 100-300 KB.
 const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
-// Free trial and yearly plan
-const DEFAULT_YEAR_PRICE = 600; // dollars; a YEAR_PRICE setting on the Worker overrides it
-const DAY = 864e5, TRIAL_DAYS = 30, GRACE_DAYS = 3, YEAR_DAYS = 365, TRIAL_WARN_DAYS = 7, RENEW_WARN_DAYS = 30;
+// Free tier and Pro subscription
+const DAY = 864e5;
+const DEFAULT_PRO_PRICE = 39; // dollars/month; a PRO_PRICE setting on the Worker overrides it
+const DEFAULT_FREE_FEE_PERCENT = 0.5; // a FREE_FEE_PERCENT setting on the Worker overrides it
+const DEFAULT_PRO_FEE_PERCENT = 0; // a PRO_FEE_PERCENT setting on the Worker overrides it
+const PRO_RENEW_WARN_DAYS = 7;
+const PRO_RECHECK_MS = 5 * 60e3; // how often to re-ask Stripe whether a Pro subscription is still active
 
 export default {
   async fetch(request, env, ctx) {
@@ -62,7 +78,7 @@ export default {
       const GET = request.method === 'GET', POST = request.method === 'POST';
 
       if (GET && path === '/store') {
-        const [settings, cfg, plan] = await Promise.all([getSettings(env), loadConfig(env).catch(() => null), getPlan(env).then(p => refreshPayments(env, p))]);
+        const [settings, cfg, plan] = await Promise.all([getSettings(env), loadConfig(env).catch(() => null), getPlan(env).then(p => refreshPayments(env, p)).then(p => refreshPro(env, p))]);
         const products = cfg ? cfg.products.map(p => ({ id: p.id, name: p.name, category: p.category, price: p.price })) : [];
         return json({ ...settings, memberPercent: settings.memberPercent ?? cfg?.members?.percentOff ?? 0, store: cfg ? { name: cfg.store?.name, brandColor: cfg.store?.brandColor } : null, products, ordering: ordering(plan) }, 200, { 'Cache-Control': 'no-store' });
       }
@@ -79,28 +95,35 @@ export default {
 
       if (POST && path === '/checkout') return checkout(request, env, ctx);
 
-      // ----- Free trial, yearly plan and Stripe Connect -----
+      // ----- Free tier, Pro subscription and Stripe Connect -----
       if (path.startsWith('/mars/')) {
         if (!(await checkMars(request, env))) return json({ error: 'Wrong Mars password' }, 401);
         const plan = await getPlan(env);
-        if (GET && path === '/mars/plan') return json({ plan, ...planState(plan) }, 200, { 'Cache-Control': 'no-store' });
+        if (GET && path === '/mars/plan') return json({ plan, ...planState(plan), ownerPasswordSet: !!(await env.SHOP.get(OWNER_PASS_KEY)) }, 200, { 'Cache-Control': 'no-store' });
+        if (POST && path === '/mars/owner-password/reset') {
+          await env.SHOP.delete(OWNER_PASS_KEY);
+          return json({ plan, ...planState(plan), ownerPasswordSet: false });
+        }
         if (POST && path === '/mars/activate') {
           const b = await request.json().catch(() => ({}));
-          if (plan?.trialStart && !b.restart) return json({ error: 'The trial for this shop has already started', plan, ...planState(plan) }, 409);
+          if (plan?.activatedAt && !b.restart) return json({ error: 'This shop is already active', plan, ...planState(plan) }, 409);
           const now = Date.now();
-          const next = { ...(plan || {}), trialStart: now, trialEnds: now + TRIAL_DAYS * DAY, signup: signupFrom(b, plan?.signup) };
+          const next = { ...(plan || {}), activatedAt: now, signup: signupFrom(b, plan?.signup) };
           await putPlan(env, next);
           return json({ ok: true, plan: next, ...planState(next) });
         }
         if (POST && path === '/mars/plan') {
-          if (!plan?.trialStart) return json({ error: 'Start the trial first' }, 400);
+          if (!plan?.activatedAt) return json({ error: 'Activate this shop first' }, 400);
           const b = await request.json().catch(() => ({})), next = { ...plan };
-          for (const k of ['trialEnds', 'paidUntil']) {
-            if (!(k in b)) continue;
-            if (b[k] === null || b[k] === '') { delete next[k]; continue }
-            if (!/^\d{4}-\d{2}-\d{2}$/.test(b[k])) return json({ error: k + ' must look like 2027-12-02' }, 400);
-            next[k] = Date.parse(b[k] + 'T23:59:59Z');
+          if ('pro' in b) next.pro = !!b.pro;
+          if ('proCurrentPeriodEnd' in b) {
+            if (b.proCurrentPeriodEnd === null || b.proCurrentPeriodEnd === '') delete next.proCurrentPeriodEnd;
+            else {
+              if (!/^\d{4}-\d{2}-\d{2}$/.test(b.proCurrentPeriodEnd)) return json({ error: 'proCurrentPeriodEnd must look like 2027-12-02' }, 400);
+              next.proCurrentPeriodEnd = Date.parse(b.proCurrentPeriodEnd + 'T23:59:59Z');
+            }
           }
+          next.proCheckedAt = Date.now(); // a hand-set status sticks until the next scheduled recheck
           await putPlan(env, next);
           return json({ ok: true, plan: next, ...planState(next) });
         }
@@ -109,9 +132,9 @@ export default {
 
       if (path === '/admin/plan' || path === '/admin/terms' || path.startsWith('/admin/plan/') || path.startsWith('/admin/payments/')) {
         if (!(await checkPassword(request, env))) return denied();
-        const plan = await getPlan(env);
-        if (GET && path === '/admin/plan') return json(planForOwner(plan, env), 200, { 'Cache-Control': 'no-store' });
-        if (!plan?.trialStart) return json({ error: 'This shop has no free trial or plan yet' }, 400);
+        let plan = await getPlan(env);
+        if (GET && path === '/admin/plan') { plan = await refreshPro(env, plan); return json(planForOwner(plan, env), 200, { 'Cache-Control': 'no-store' }) }
+        if (!plan?.activatedAt) return json({ error: 'This shop has no plan yet' }, 400);
 
         if (POST && path === '/admin/terms') {
           const b = await request.json().catch(() => ({}));
@@ -122,33 +145,32 @@ export default {
         }
 
         if (POST && path === '/admin/plan/checkout') {
-          const price = yearPrice(env);
-          if (!(price > 0) || !env.STRIPE_SECRET_KEY || !env.SITE_URL) return json({ error: 'Signing up is not set up yet. Please contact Mars.' }, 500);
+          const priceCents = Math.round(proPrice(env) * 100);
+          if (!(priceCents > 0) || !env.STRIPE_SECRET_KEY || !env.SITE_URL) return json({ error: 'Upgrading to Pro is not set up yet. Please contact Mars.' }, 500);
           const b = await request.json().catch(() => ({}));
-          const signup = signupFrom(b, {});
+          const signup = signupFrom(b, plan.signup || {});
           if (!signup.name) return json({ error: 'Please add your name' }, 400);
           if (!signup.business) return json({ error: 'Please add your business name' }, 400);
           if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(signup.email)) return json({ error: 'Please check your email address' }, 400);
-          if (b.agree !== true) return json({ error: 'Please tick the box to agree to the service agreement' }, 400);
+          if (b.agree !== true) return json({ error: 'Please tick the box to agree to the Pro terms' }, 400);
           const back = sameSite(b.returnUrl, env.SITE_URL);
           if (!back) return json({ error: 'Bad return address' }, 400);
-          await putPlan(env, { ...plan, signup, agreedAt: Date.now() });
+          await putPlan(env, { ...plan, signup });
           const form = new URLSearchParams();
-          form.set('mode', 'payment');
-          form.set('managed_payments[enabled]', 'false');
+          form.set('mode', 'subscription');
           form.set('line_items[0][price_data][currency]', 'usd');
-          form.set('line_items[0][price_data][unit_amount]', String(Math.round(price * 100)));
-          form.set('line_items[0][price_data][product_data][name]', 'Shop app: one year');
+          form.set('line_items[0][price_data][unit_amount]', String(priceCents));
+          form.set('line_items[0][price_data][recurring][interval]', 'month');
+          form.set('line_items[0][price_data][product_data][name]', 'Shop app: Pro plan');
           form.set('line_items[0][price_data][product_data][description]', signup.business);
           form.set('line_items[0][quantity]', '1');
           form.set('customer_email', signup.email);
-          form.set('metadata[kind]', 'shop-year');
+          form.set('metadata[kind]', 'shop-pro');
           form.set('metadata[site]', env.SITE_URL);
           form.set('metadata[business]', signup.business);
-          form.set('payment_intent_data[description]', 'Shop app, one year: ' + signup.business);
-          form.set('success_url', back + '?plan=paid&session={CHECKOUT_SESSION_ID}');
+          form.set('success_url', back + '?plan=pro&session={CHECKOUT_SESSION_ID}');
           form.set('cancel_url', back + '?plan=cancel');
-          // Mars's own Stripe account (no Stripe-Account header), so the yearly fee goes to Mars.
+          // Mars's own Stripe account (no Stripe-Account header), so the Pro fee goes to Mars.
           const session = await stripe(env, '/checkout/sessions', { form });
           return json({ url: session.url });
         }
@@ -157,31 +179,45 @@ export default {
           const b = await request.json().catch(() => ({}));
           const id = typeof b.session === 'string' ? b.session : '';
           if (!/^cs_[\w]{8,200}$/.test(id)) return json({ error: 'Bad payment reference' }, 400);
-          if ((plan.paidSessions || []).some(p => p.id === id)) return json(planForOwner(plan, env));
-          const s = await stripe(env, '/checkout/sessions/' + id);
-          if (s.metadata?.kind !== 'shop-year' || s.metadata?.site !== env.SITE_URL) return json({ error: 'That payment is not for this shop' }, 400);
-          if (s.payment_status !== 'paid') return json({ error: 'The payment has not gone through yet. Please try again in a minute.' }, 409);
-          const now = Date.now(), from = Math.max(now, plan.trialEnds || 0, plan.paidUntil || 0);
-          const next = { ...plan, paidUntil: from + YEAR_DAYS * DAY, paidSessions: [...(plan.paidSessions || []), { id, at: now, amount: (s.amount_total || 0) / 100 }].slice(-20) };
+          if (plan.proSubscriptionId && (plan.confirmedSessions || []).includes(id)) return json(planForOwner(plan, env));
+          const s = await stripe(env, '/checkout/sessions/' + id + '?expand[]=subscription');
+          if (s.metadata?.kind !== 'shop-pro' || s.metadata?.site !== env.SITE_URL) return json({ error: 'That payment is not for this shop' }, 400);
+          if (s.status !== 'complete') return json({ error: 'The payment has not gone through yet. Please try again in a minute.' }, 409);
+          const sub = s.subscription;
+          const next = {
+            ...plan, pro: true, proSubscriptionId: sub?.id || plan.proSubscriptionId,
+            proCurrentPeriodEnd: sub?.current_period_end ? sub.current_period_end * 1000 : plan.proCurrentPeriodEnd,
+            proCheckedAt: Date.now(),
+            confirmedSessions: [...(plan.confirmedSessions || []), id].slice(-20),
+          };
           await putPlan(env, next);
           return json({ ...planForOwner(next, env), justPaid: true });
+        }
+
+        if (POST && path === '/admin/plan/cancel') {
+          if (!plan.pro || !plan.proSubscriptionId) return json({ error: 'There is no active Pro subscription to cancel' }, 400);
+          await stripe(env, '/subscriptions/' + plan.proSubscriptionId, { form: new URLSearchParams({ cancel_at_period_end: 'true' }) });
+          const next = { ...plan, proCheckedAt: 0 }; // force the next load to re-ask Stripe for the current status
+          await putPlan(env, next);
+          return json(planForOwner(next, env));
         }
 
         if (POST && path === '/admin/payments/session') {
           if (!env.STRIPE_SECRET_KEY || !env.STRIPE_PUBLISHABLE_KEY) return json({ error: 'Payments set-up is not ready yet. Please contact Mars.' }, 500);
           let account = plan.account;
           if (!account) {
-            const form = new URLSearchParams();
-            // The shop gets its own full Stripe account and pays Stripe's fees itself; Stripe collects
-            // the sign-up details. Mars pays no Connect fees for accounts set up this way.
-            form.set('controller[stripe_dashboard][type]', 'full');
-            form.set('controller[fees][payer]', 'account');
-            form.set('controller[losses][payments]', 'stripe');
-            form.set('controller[requirement_collection]', 'stripe');
-            if (plan.signup?.email) form.set('email', plan.signup.email);
-            form.set('business_profile[url]', env.SITE_URL);
-            form.set('metadata[site]', env.SITE_URL);
-            const acct = await stripe(env, '/accounts', { form });
+            // The shop gets its own full Stripe account (Accounts v2) and pays Stripe's fees itself;
+            // Stripe collects the sign-up details and carries losses. Mars pays no Connect fees for it.
+            const body = {
+              identity: { country: 'us' },
+              dashboard: 'full',
+              defaults: { responsibilities: { fees_collector: 'stripe', losses_collector: 'stripe' } },
+              configuration: { merchant: { capabilities: { card_payments: { requested: true } } } },
+              metadata: { site: env.SITE_URL },
+            };
+            if (plan.signup?.email) body.contact_email = plan.signup.email;
+            if (plan.signup?.business) body.display_name = String(plan.signup.business).slice(0, 100);
+            const acct = await stripeV2(env, '/core/accounts', body);
             account = acct.id;
             await putPlan(env, { ...plan, account });
           }
@@ -194,7 +230,7 @@ export default {
 
         if (GET && path === '/admin/payments/status') {
           if (!plan.account) return json({ connected: false, on: false });
-          const a = await stripe(env, '/accounts/' + plan.account);
+          const a = await accountStatus(env, plan.account);
           const due = [...(a.requirements?.currently_due || []), ...(a.requirements?.past_due || [])];
           const on = !!a.charges_enabled;
           if (on !== !!plan.paymentsOn) await putPlan(env, { ...plan, paymentsOn: on });
@@ -242,7 +278,20 @@ export default {
       }
 
       if (POST && path === '/login') {
+        const r = await passwordCheck(request, env);
+        if (!r.ok) return denied();
+        return json({ ok: true, mustSetPassword: r.setupCode });
+      }
+
+      // The owner picks their own password (first sign-in with the setup code), or changes it later.
+      if (POST && path === '/admin/password') {
         if (!(await checkPassword(request, env))) return denied();
+        const b = await request.json().catch(() => ({}));
+        const next = typeof b.newPassword === 'string' ? b.newPassword : '';
+        if (next.length < 8) return json({ error: 'Use at least 8 characters' }, 400);
+        if (next.length > 200) return json({ error: 'That password is too long' }, 400);
+        if (env.ADMIN_PASSWORD && await sameText(next, env.ADMIN_PASSWORD)) return json({ error: "Pick a password that's different from your setup code" }, 400);
+        await saveOwnerPassword(env, next);
         return json({ ok: true });
       }
 
@@ -325,13 +374,13 @@ async function checkout(request, env, ctx) {
   if (!env.STRIPE_SECRET_KEY || !env.SITE_URL) return json({ error: 'Checkout is not set up yet' }, 500);
   const body = await request.json().catch(() => null);
   if (!body) return json({ error: 'Bad request' }, 400);
-  const [cfg, settings, plan] = await Promise.all([loadConfig(env), getSettings(env), getPlan(env).then(p => refreshPayments(env, p))]);
-  // Once Mars starts a trial, card payments go to the shop's own Stripe account, and checkout
-  // pauses if the trial or paid year has run out (after the grace days).
+  let [cfg, settings, plan] = await Promise.all([loadConfig(env), getSettings(env), getPlan(env)]);
+  plan = await refreshPayments(env, plan);
+  plan = await refreshPro(env, plan);
+  // Once Mars activates a shop, card payments go to the shop's own Stripe account.
   const open = ordering(plan);
-  if (open === 'paused') return json({ error: 'Ordering is paused right now, please check back soon', ordering: open }, 403);
   if (open === 'setup') return json({ error: 'This shop is still setting up card payments, please check back soon', ordering: open }, 403);
-  const account = plan?.trialStart ? plan.account : '';
+  const account = plan?.activatedAt ? plan.account : '';
   const byId = Object.fromEntries(cfg.products.map(p => [p.id, p]));
   const memberPercent = settings.memberPercent ?? cfg.members?.percentOff ?? 0;
 
@@ -343,17 +392,19 @@ async function checkout(request, env, ctx) {
   }
 
   const form = new URLSearchParams();
-  let n = 0;
+  let n = 0, totalCents = 0;
   for (const it of (Array.isArray(body.items) ? body.items.slice(0, 40) : [])) {
     const p = byId[it.id], qty = Math.floor(Number(it.qty)), sizes = p?.sizes?.length ? p.sizes : ['One size'];
     if (!p || !sizes.includes(it.size) || !(qty >= 1 && qty <= 20)) continue;
     const { price, why } = priceOf(p, settings, memberPercent, cfg, !!memberEmail);
+    const unitCents = Math.round(price * 100);
     form.set(`line_items[${n}][price_data][currency]`, (cfg.store?.currency || 'usd').toLowerCase());
-    form.set(`line_items[${n}][price_data][unit_amount]`, String(Math.round(price * 100)));
+    form.set(`line_items[${n}][price_data][unit_amount]`, String(unitCents));
     form.set(`line_items[${n}][price_data][product_data][name]`, sizes.length > 1 ? `${p.name} (${it.size})` : p.name);
     const label = { sale: 'Sale price', drop: "This week's drop", member: 'Member price' }[why];
     if (label) form.set(`line_items[${n}][price_data][product_data][description]`, label);
     form.set(`line_items[${n}][quantity]`, String(qty));
+    totalCents += unitCents * qty;
     n++;
   }
   if (!n) return json({ error: 'Your cart is empty' }, 400);
@@ -372,11 +423,21 @@ async function checkout(request, env, ctx) {
   form.set('metadata[member]', memberEmail ? 'yes' : 'no');
   form.set('payment_intent_data[description]', ship ? 'Order - SHIP' : 'Order - PICKUP IN STORE');
   if (ship) {
+    const shipCents = Math.round(Number(cfg.shipping.flat || 0) * 100);
+    totalCents += shipCents;
     form.set('shipping_address_collection[allowed_countries][0]', 'US');
     form.set('shipping_options[0][shipping_rate_data][type]', 'fixed_amount');
     form.set('shipping_options[0][shipping_rate_data][display_name]', 'Standard shipping');
-    form.set('shipping_options[0][shipping_rate_data][fixed_amount][amount]', String(Math.round(Number(cfg.shipping.flat || 0) * 100)));
+    form.set('shipping_options[0][shipping_rate_data][fixed_amount][amount]', String(shipCents));
     form.set('shipping_options[0][shipping_rate_data][fixed_amount][currency]', (cfg.store?.currency || 'usd').toLowerCase());
+  }
+
+  // The processing cut: only on orders that go through a shop's own connected account, and only
+  // once Mars has activated the shop. Free tier pays FREE_FEE_PERCENT, Pro pays PRO_FEE_PERCENT.
+  if (account) {
+    const feePercent = planState(plan).pro ? numEnv(env.PRO_FEE_PERCENT, DEFAULT_PRO_FEE_PERCENT) : numEnv(env.FREE_FEE_PERCENT, DEFAULT_FREE_FEE_PERCENT);
+    const feeCents = Math.round(totalCents * feePercent / 100);
+    if (feeCents > 0) form.set('payment_intent_data[application_fee_amount]', String(feeCents));
   }
 
   const res = await fetch('https://api.stripe.com/v1/checkout/sessions', {
@@ -417,8 +478,8 @@ function priceOf(p, settings, memberPercent, cfg, isMember) {
 // Only checkouts made by this shop app count (they carry metadata "fulfilment").
 async function salesStats(env, url) {
   if (!env.STRIPE_SECRET_KEY) return { error: 'Stripe is not connected yet' };
-  const plan = await getPlan(env), account = plan?.trialStart ? plan.account : '';
-  if (plan?.trialStart && !account) return { error: 'Sales show here once card payments are set up' };
+  const plan = await getPlan(env), account = plan?.activatedAt ? plan.account : '';
+  if (plan?.activatedAt && !account) return { error: 'Sales show here once card payments are set up' };
   const days = [7, 30, 90].includes(Number(url.searchParams.get('days'))) ? Number(url.searchParams.get('days')) : 30;
   const tz = Math.max(-840, Math.min(840, Number(url.searchParams.get('tz')) || 0)); // owner's offset in minutes (from getTimezoneOffset)
   const dayOf = ms => new Date(ms - tz * 60000).toISOString().slice(0, 10);
@@ -485,44 +546,55 @@ async function salesStats(env, url) {
   };
 }
 
-// ---------- Free trial and yearly plan ----------
+// ---------- Free tier and Pro subscription ----------
 async function getPlan(env) { return (await env.SHOP.get('plan', 'json')) || null }
 async function putPlan(env, plan) { await env.SHOP.put('plan', JSON.stringify({ ...plan, updated: Date.now() })) }
-// trial -> (paid) -> grace (3 days, still taking orders) -> paused. No plan record = not managed.
+const numEnv = (v, fallback) => { const n = Number(v); return Number.isFinite(n) ? n : fallback };
+
+// A shop with no plan record isn't managed by Mars at all. Otherwise it's on the free tier, or on
+// Pro while plan.pro is true. There's no trial and no pause for non-payment: free is really free.
 function planState(plan, now = Date.now()) {
-  if (!plan?.trialStart) return { state: 'none' };
-  const trialEnds = plan.trialEnds || 0, paidUntil = plan.paidUntil || 0, endsAt = Math.max(trialEnds, paidUntil);
-  const pauseAt = endsAt + GRACE_DAYS * DAY;
-  let state = 'paused';
-  if (now <= endsAt) state = paidUntil && paidUntil > trialEnds ? 'paid' : 'trial';
-  else if (now <= pauseAt) state = 'grace';
-  const daysLeft = Math.max(0, Math.ceil((endsAt - now) / DAY)), graceLeft = state === 'grace' ? Math.max(1, Math.ceil((pauseAt - now) / DAY)) : 0;
-  const soon = state === 'trial' ? daysLeft <= TRIAL_WARN_DAYS : state === 'paid' ? daysLeft <= RENEW_WARN_DAYS : false;
-  return { state, trialStart: plan.trialStart, trialEnds, paidUntil: paidUntil || null, endsAt, pauseAt, daysLeft, graceLeft, soon };
+  if (!plan?.activatedAt) return { state: 'none' };
+  const pro = !!plan.pro;
+  const endsAt = plan.proCurrentPeriodEnd || 0;
+  const daysLeft = pro && endsAt ? Math.max(0, Math.ceil((endsAt - now) / DAY)) : null;
+  const soon = pro && endsAt ? daysLeft <= PRO_RENEW_WARN_DAYS : false;
+  return { state: pro ? 'pro' : 'free', pro, proCurrentPeriodEnd: endsAt || null, daysLeft, soon };
 }
 // If the owner finished Stripe's sign-up but Stripe approved it later, notice without waiting for the
 // owner app: ask Stripe again, at most every 5 minutes, while card payments are still off.
 async function refreshPayments(env, plan) {
-  if (!plan?.trialStart || !plan.account || plan.paymentsOn || Date.now() - (plan.checkedAt || 0) < 5 * 60e3) return plan;
+  if (!plan?.activatedAt || !plan.account || plan.paymentsOn || Date.now() - (plan.checkedAt || 0) < PRO_RECHECK_MS) return plan;
   try {
-    const a = await stripe(env, '/accounts/' + plan.account);
+    const a = await accountStatus(env, plan.account);
     const next = { ...plan, paymentsOn: !!a.charges_enabled, checkedAt: Date.now() };
     await putPlan(env, next);
     return next;
   } catch { return plan }
 }
+// Re-asks Stripe whether a Pro subscription is still active, so a cancellation (or a renewal
+// failure) is picked up without needing a webhook. Checked at most every 5 minutes.
+async function refreshPro(env, plan) {
+  if (!plan?.proSubscriptionId || Date.now() - (plan.proCheckedAt || 0) < PRO_RECHECK_MS) return plan;
+  try {
+    const sub = await stripe(env, '/subscriptions/' + plan.proSubscriptionId);
+    const active = sub.status === 'active' || sub.status === 'trialing';
+    const next = { ...plan, pro: active, proCurrentPeriodEnd: sub.current_period_end ? sub.current_period_end * 1000 : plan.proCurrentPeriodEnd, proCheckedAt: Date.now() };
+    await putPlan(env, next);
+    return next;
+  } catch { return plan }
+}
 function ordering(plan) {
-  if (!plan?.trialStart) return 'open';
-  if (planState(plan).state === 'paused') return 'paused';
+  if (!plan?.activatedAt) return 'open';
   return plan.account && plan.paymentsOn ? 'open' : 'setup';
 }
 function planForOwner(plan, env) {
   const st = planState(plan);
   if (st.state === 'none') return st;
-  return { ...st, yearPrice: yearPrice(env), termsAgreedAt: plan.termsAgreedAt || null, agreedAt: plan.agreedAt || null,
+  return { ...st, proPrice: proPrice(env), termsAgreedAt: plan.termsAgreedAt || null,
     signup: plan.signup || {}, payments: { connected: !!plan.account, on: !!plan.paymentsOn }, ordering: ordering(plan) };
 }
-const yearPrice = env => Number(env.YEAR_PRICE) > 0 ? Number(env.YEAR_PRICE) : DEFAULT_YEAR_PRICE;
+const proPrice = env => Number(env.PRO_PRICE) > 0 ? Number(env.PRO_PRICE) : DEFAULT_PRO_PRICE;
 function signupFrom(b, prev = {}) {
   const pick = (k, max) => (typeof b?.[k] === 'string' ? clean(b[k], max) : prev?.[k] || '');
   return { name: pick('name', 60), business: pick('business', 80), email: pick('email', LIMITS.email).toLowerCase(), phone: pick('phone', LIMITS.phone) };
@@ -531,10 +603,32 @@ function signupFrom(b, prev = {}) {
 function sameSite(u, site) {
   try { const a = new URL(u), b = new URL(site); return a.origin === b.origin && a.protocol === 'https:' || a.origin === b.origin && a.hostname === 'localhost' ? a.origin + a.pathname : '' } catch { return '' }
 }
+// Stripe's Accounts v2 API (JSON body, dated version header). Used to create each shop's account.
+const STRIPE_V2_VERSION = '2026-10-28.endive';
+async function stripeV2(env, path, body = null) {
+  const headers = { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}`, 'Stripe-Version': STRIPE_V2_VERSION };
+  if (body) headers['Content-Type'] = 'application/json';
+  const res = await fetch('https://api.stripe.com/v2' + path, { method: body ? 'POST' : 'GET', headers, body: body ? JSON.stringify(body) : undefined });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) { const e = new Error(data?.error?.message || `error ${res.status}`); e.stripe = true; throw e }
+  return data;
+}
+// Whether a shop's account can take cards. Reads it the v1 way (v2 accounts work there too); if
+// Stripe ever refuses that, reads the v2 account and maps it to the same few fields.
+async function accountStatus(env, id) {
+  try { return await stripe(env, '/accounts/' + id) } catch (err) {
+    const a = await stripeV2(env, '/core/accounts/' + id + '?include=configuration.merchant&include=requirements');
+    const card = a.configuration?.merchant?.capabilities?.card_payments?.status;
+    const payouts = a.configuration?.merchant?.capabilities?.stripe_balance?.payouts?.status;
+    const due = (a.requirements?.entries || []).filter(e => e.minimum_deadline?.status !== 'eventually_due').map(e => e.description || 'details');
+    return { charges_enabled: card === 'active', payouts_enabled: payouts === 'active', details_submitted: card === 'active' || card === 'pending', requirements: { currently_due: due, past_due: [], pending_verification: card === 'pending' ? ['pending'] : [] } };
+  }
+}
 async function stripe(env, path, { form = null, account = '' } = {}) {
   const headers = { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}` };
   if (form) headers['Content-Type'] = 'application/x-www-form-urlencoded';
   if (account) headers['Stripe-Account'] = account;
+  const method = form ? 'POST' : (path.includes('?') ? 'GET' : 'GET');
   const res = await fetch('https://api.stripe.com/v1' + path, { method: form ? 'POST' : 'GET', headers, body: form || undefined });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) { const e = new Error(data?.error?.message || `error ${res.status}`); e.stripe = true; throw e }
@@ -569,13 +663,30 @@ async function getSettings(env) {
 const round2 = n => Math.round(n * 100) / 100;
 const clean = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 
-async function checkPassword(request, env) {
+// The owner signs in with their own password once they've chosen one. Until then, ADMIN_PASSWORD
+// works as a one-time setup code: it signs them in only so they can pick their own password, and
+// stops working the moment they do. Mars can reset it from mars.html (the setup code works again).
+async function checkPassword(request, env) { return (await passwordCheck(request, env)).ok }
+async function passwordCheck(request, env) {
   const given = request.headers.get('X-Admin-Password') || '';
-  const real = env.ADMIN_PASSWORD || '';
-  if (!real) return false;
-  const ok = await sameText(given, real);
+  const stored = await env.SHOP.get(OWNER_PASS_KEY, 'json');
+  let ok = false;
+  if (stored?.hash) ok = given.length > 0 && await sameText(await hashPassword(given, stored.salt, stored.iter), stored.hash);
+  else if (env.ADMIN_PASSWORD) ok = await sameText(given, env.ADMIN_PASSWORD);
   if (!ok) await new Promise(r => setTimeout(r, 1000)); // slows down password guessing
-  return ok;
+  return { ok, setupCode: ok && !stored?.hash };
+}
+const OWNER_PASS_KEY = 'owner-password';
+const PASS_ITER = 20000; // kept modest so each sign-in stays inside the free plan's CPU allowance
+async function hashPassword(password, saltB64, iter = PASS_ITER) {
+  const salt = Uint8Array.from(atob(saltB64), c => c.charCodeAt(0));
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: iter }, key, 256);
+  return btoa(String.fromCharCode(...new Uint8Array(bits)));
+}
+async function saveOwnerPassword(env, password) {
+  const salt = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
+  await env.SHOP.put(OWNER_PASS_KEY, JSON.stringify({ salt, iter: PASS_ITER, hash: await hashPassword(password, salt), setAt: Date.now() }));
 }
 async function sameText(a, b) {
   const enc = new TextEncoder();

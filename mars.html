@@ -57,6 +57,13 @@ dt{color:var(--muted)}dd{margin:0;font-weight:600}
     <p class="msg" id="start-msg" aria-live="polite"></p>
   </form>
 
+  <section class="card">
+    <h2>Owner's password</h2>
+    <p class="sub">The owner signs in once with the setup code (the shop's <code>ADMIN_PASSWORD</code> in Cloudflare), then picks their own password. If they forget it, reset it here and give them a setup code again. To be safe, change <code>ADMIN_PASSWORD</code> in Cloudflare to a new code first.</p>
+    <button type="button" class="alt" id="pw-reset">Reset owner's password</button>
+    <p class="msg" id="pw-reset-msg" aria-live="polite"></p>
+  </section>
+
   <form class="card" id="pro">
     <h2>Set Pro by hand</h2>
     <p class="sub">For a Pro payment taken in cash or by check, turn Pro on and set when it's paid through. Leave the date empty to turn Pro on with no end date, or untick Pro and save to turn it off.</p>
@@ -87,7 +94,7 @@ function show(d) {
   const p = d.plan || {}, s = p.signup || {}, f = $('#facts');
   f.hidden = false;
   f.innerHTML = [['State', LABEL[d.state] || d.state], ['Activated', day(p.activatedAt)], ['Pro paid through', d.proCurrentPeriodEnd ? day(d.proCurrentPeriodEnd) : '–'],
-    ['Owner agreed to terms', day(p.termsAgreedAt)], ['Card payments', p.account ? (p.paymentsOn ? 'On' : 'Set-up started') : 'Not set up'], ['Owner', [s.name, s.business].filter(Boolean).join(', ') || '–'], ['Email', s.email || '–']]
+    ['Owner agreed to terms', day(p.termsAgreedAt)], ['Owner\'s own password', d.ownerPasswordSet === undefined ? '–' : d.ownerPasswordSet ? 'Set by owner' : 'Not set yet (setup code works)'], ['Card payments', p.account ? (p.paymentsOn ? 'On' : 'Set-up started') : 'Not set up'], ['Owner', [s.name, s.business].filter(Boolean).join(', ') || '–'], ['Email', s.email || '–']]
     .map(([k, v]) => `<dt>${k}</dt><dd>${String(v).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))}</dd>`).join('');
   if (d.proCurrentPeriodEnd) $('#pro-until').value = new Date(d.proCurrentPeriodEnd).toISOString().slice(0, 10);
   $('#pro-on').checked = d.state === 'pro';
@@ -103,6 +110,11 @@ $('#start').addEventListener('submit', async e => {
     } else say(m, err.message);
   }
 });
+$('#pw-reset').onclick = async () => {
+  const m = $('#pw-reset-msg');
+  if (!confirm("Reset the owner's password? They'll need the setup code to sign in and pick a new one.")) return;
+  try { show(await call('/mars/owner-password/reset', {})); say(m, 'Reset. The setup code works again.', true) } catch (err) { say(m, err.message) }
+};
 $('#pro').addEventListener('submit', async e => {
   e.preventDefault(); const m = $('#pro-msg'), body = { pro: $('#pro-on').checked };
   body.proCurrentPeriodEnd = $('#pro-until').value || null;

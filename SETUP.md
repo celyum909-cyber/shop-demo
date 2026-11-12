@@ -43,7 +43,7 @@ Upload `shop.html` and the `owner` folder (`owner/index.html`, `owner/manifest.w
 
    | Name | Type | Value |
    | --- | --- | --- |
-   | `ADMIN_PASSWORD` | Secret | The owner's password |
+   | `ADMIN_PASSWORD` | Secret | The owner's **one-time setup code**. They sign in with it once and pick their own password; after that the code stops working. |
    | `MARS_PASSWORD` | Secret | Mars's own password for `mars.html`. Keep it different from the owner's. |
    | `STRIPE_SECRET_KEY` | Secret | **Mars's** Stripe key, the same in every shop's Worker. `sk_test_...` while testing. |
    | `STRIPE_PUBLISHABLE_KEY` | Text or Secret | **Mars's** `pk_test_...`. It shows Stripe's sign-up form inside the owner app. |
@@ -61,7 +61,7 @@ Put the Worker address in all three pages, then upload them again:
 If any of these is left empty, that page says the Shop API is empty.
 
 ## 5. Test the whole thing (test mode, no real money)
-1. **Owner basics:** open the owner app (the `owner/` address, e.g. `https://yourname.github.io/abc-shop/owner/`) and sign in. Set a drop, put one item on sale, and save. Open the shop and check both show. Join as a member on the Members tab; prices drop.
+1. **Owner basics:** open the owner app (the `owner/` address, e.g. `https://yourname.github.io/abc-shop/owner/`) and sign in with the setup code. It asks you to choose your own password; do that. Set a drop, put one item on sale, and save. Open the shop and check both show. Join as a member on the Members tab; prices drop.
 2. **Activate:** open `mars.html` on the shop's site, type the Mars password, tap **Show this shop's plan**, fill in the owner's details and tap **Activate free tier**. From now until step 3 is done, checkout says card payments are being set up.
 3. **Owner payment setup:** in the owner app, agree to the terms, then tap **Set up payments**. If Stripe offers to reuse an existing account, pick **Create a new account** (a real owner won't see that option). Stripe's test details:
    - Phone: Stripe's test number option; any code is `000000`
@@ -114,7 +114,7 @@ The banner is built into `shop.html`. Tapping X hides it for 3 days, and the Hel
 
 **At hand-over** (after step 5 has been run in test mode):
 1. Activate the shop on `mars.html` (step 5.2).
-2. The owner agrees to the terms and taps **Set up payments** (step 5.3). Until it's done, customers see "card payments are being set up" at checkout.
+2. Give the owner the setup code (in person or by text). They sign in with it once and pick their own password. Then they agree to the terms and tap **Set up payments** (step 5.3). Until it's done, customers see "card payments are being set up" at checkout.
 3. Make the two QR codes: the **customer** one points at the shop's address and goes on the counter sign; the **owner** one points at the same address plus `/owner/` and is texted to the owner privately, never printed.
 4. If the owner wants Pro, they tap **Upgrade to Pro** in the owner app and pay by card. It renews monthly until they cancel.
 
@@ -134,7 +134,7 @@ The banner is built into `shop.html`. Tapping X hides it for 3 days, and the Hel
 - **Members:** see who joined, change the % off, and download the list as a spreadsheet for emails or texts. Tap **Remove** (then **Sure?**) to delete someone who asks, as the privacy policy promises.
 - **Rewards:** when a card is full, the customer shows the Rewards screen and staff tap "Staff: mark as claimed" twice.
 - **Order emails:** in Stripe, turn on Settings → Business → Customer emails → Successful payments. That emails customers their receipts. Every order also appears in Stripe → Payments, marked PICKUP IN STORE or SHIP.
-- **Change the password:** Cloudflare → the Worker → Settings → edit `ADMIN_PASSWORD`. The owner app will ask them to sign in again.
+- **Passwords:** the owner changes their own password at the bottom of the owner app (**Your password**). Mars never sees it. If they forget it: in Cloudflare, change `ADMIN_PASSWORD` to a new setup code, then on `mars.html` tap **Reset owner's password** and give them the new code.
 
 ## Good to know
 - If checkout shows an error about **Managed Payments** or **tax codes**: that Stripe setting is for digital products. The Worker already turns it off for each checkout, so make sure you're running the latest `shop-worker.js`.
