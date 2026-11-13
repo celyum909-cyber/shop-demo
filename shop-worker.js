@@ -10,6 +10,8 @@
 //   GET  /admin/members    -> the member list (password required)
 //   POST /admin/member/remove -> deletes one member, e.g. when they ask (password required)
 //   GET  /admin/stats      -> sales numbers for the owner, read from Stripe (password required)
+//   GET  /admin/orders     -> Pro: paid orders from the last 30 days, with ready / done status
+//   POST /admin/orders/status -> Pro: marks an order new, ready or done (body: id, status)
 //   POST /admin/photo      -> uploads or removes a product photo (password required)
 //   GET  /photo/<id>       -> a product photo (public)
 //
@@ -333,6 +335,27 @@ export default {
         return json({ ok: true, settings: next });
       }
 
+      // Pro: the order list. Orders are read from Stripe; only their status (ready / done) is kept here.
+      if (GET && path === '/admin/orders') {
+        if (!(await checkPassword(request, env))) return denied();
+        const gate = await proGate(env); if (gate) return gate;
+        return json(await listOrders(env), 200, { 'Cache-Control': 'no-store' });
+      }
+      if (POST && path === '/admin/orders/status') {
+        if (!(await checkPassword(request, env))) return denied();
+        const gate = await proGate(env); if (gate) return gate;
+        const b = await request.json().catch(() => ({}));
+        const id = typeof b.id === 'string' && /^cs_[A-Za-z0-9_]{10,200}$/.test(b.id) ? b.id : '';
+        const status = ['new', 'ready', 'done'].includes(b.status) ? b.status : '';
+        if (!id || !status) return json({ error: 'Bad request' }, 400);
+        const all = (await env.SHOP.get(ORDER_STATUS_KEY, 'json')) || {};
+        if (status === 'new') delete all[id]; else all[id] = { status, at: Date.now() };
+        // Keep the newest 500 so the record never grows without limit.
+        const kept = Object.fromEntries(Object.entries(all).sort((a, b) => b[1].at - a[1].at).slice(0, 500));
+        await env.SHOP.put(ORDER_STATUS_KEY, JSON.stringify(kept));
+        return json({ ok: true, id, status: kept[id]?.status || 'new', at: kept[id]?.at || null });
+      }
+
       if (GET && path === '/admin/stats') {
         if (!(await checkPassword(request, env))) return denied();
         return json(await salesStats(env, url), 200, { 'Cache-Control': 'no-store' });
@@ -544,6 +567,54 @@ async function salesStats(env, url) {
     byDay: Object.values(byDay).map(d => ({ ...d, revenue: r2(d.revenue) })),
     top: Object.values(products).map(p => ({ ...p, revenue: r2(p.revenue) })).sort((a, b) => b.revenue - a.revenue).slice(0, 8),
   };
+}
+
+// ---------- Pro: order list ----------
+const ORDER_STATUS_KEY = 'order-status';
+// A shop on the free plan gets a "this is a Pro feature" answer. Shops Mars never activated
+// (no plan at all) keep every feature, as before.
+async function proGate(env) {
+  let plan = await getPlan(env);
+  if (!plan?.activatedAt) return null;
+  plan = await refreshPro(env, plan);
+  return planState(plan).pro ? null : json({ error: 'The order list is a Pro feature', pro: false }, 402);
+}
+// Paid orders from the last 30 days, newest first, with each one's status.
+async function listOrders(env) {
+  if (!env.STRIPE_SECRET_KEY) return { error: 'Stripe is not connected yet', orders: [] };
+  const plan = await getPlan(env), account = plan?.activatedAt ? plan.account : '';
+  if (plan?.activatedAt && !account) return { orders: [], note: 'Orders show here once card payments are set up' };
+  const since = Math.floor((Date.now() - 30 * 86400000) / 1000);
+  const sessions = [];
+  let after = '', pages = 0, livemode = null;
+  while (pages < 3) {
+    const q = new URLSearchParams({ status: 'complete', limit: '100', 'created[gte]': String(since) });
+    q.append('expand[]', 'data.line_items');
+    if (after) q.set('starting_after', after);
+    const res = await fetch('https://api.stripe.com/v1/checkout/sessions?' + q, { headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}`, ...(account ? { 'Stripe-Account': account } : {}) } });
+    const page = await res.json();
+    if (!res.ok) return { error: page?.error?.message || 'Could not read orders from Stripe', orders: [] };
+    for (const x of page.data) { livemode ??= x.livemode; if (x.metadata?.fulfilment && x.payment_status === 'paid') sessions.push(x) }
+    pages++;
+    if (!page.has_more || !page.data.length) break;
+    after = page.data[page.data.length - 1].id;
+  }
+  const status = (await env.SHOP.get(ORDER_STATUS_KEY, 'json')) || {};
+  const orders = sessions.map(x => {
+    const c = x.customer_details || {};
+    const shipTo = x.collected_information?.shipping_details || x.shipping_details || null;
+    const a = shipTo?.address || null;
+    return {
+      id: x.id, ref: x.id.slice(-5).toUpperCase(), created: x.created * 1000,
+      name: shipTo?.name || c.name || '', email: c.email || '', phone: c.phone || '',
+      fulfilment: x.metadata.fulfilment === 'ship' ? 'ship' : 'pickup', member: x.metadata.member === 'yes',
+      address: a ? [a.line1, a.line2, [a.city, a.state, a.postal_code].filter(Boolean).join(' ')].filter(Boolean).join(', ') : '',
+      items: (x.line_items?.data || []).map(li => ({ name: String(li.description || 'Item'), qty: li.quantity || 1 })),
+      total: (x.amount_total || 0) / 100, currency: x.currency || 'usd',
+      status: status[x.id]?.status || 'new', statusAt: status[x.id]?.at || null,
+    };
+  });
+  return { orders, testMode: livemode === false, truncated: pages >= 3 };
 }
 
 // ---------- Free tier and Pro subscription ----------

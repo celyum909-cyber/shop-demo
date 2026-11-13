@@ -129,6 +129,24 @@ input[type=text],input[type=password],input[type=number],input[type=date],select
 .plan.green{background:color-mix(in srgb,var(--ok) 10%,var(--panel));border-color:color-mix(in srgb,var(--ok) 55%,var(--line))}
 .plan.green h2{color:var(--ok)}
 .plan .link{background:none;border:0;padding:0;color:inherit;font-weight:700;text-decoration:underline;font-size:13.5px;justify-self:start}
+/* Pro: order list */
+#o-tabs.hidden{display:none}
+.olist{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:10px}
+.order{border:1px solid var(--line);border-radius:14px;padding:12px 14px;display:grid;gap:6px}
+.order.ready{border-color:color-mix(in srgb,var(--ok) 55%,var(--line));background:color-mix(in srgb,var(--ok) 7%,var(--panel))}
+.o-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.o-top b{font-size:15px}
+.o-time{margin-left:auto;color:var(--muted);font-size:12.5px}
+.badge{font-size:11.5px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;padding:3px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+.badge.ship{color:var(--brand);border-color:color-mix(in srgb,var(--brand) 45%,var(--line))}
+.badge.ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 50%,var(--line))}
+.o-items{font-size:14px;line-height:1.45}
+.o-meta{font-size:13px;color:var(--muted);display:flex;gap:6px 12px;flex-wrap:wrap}
+.o-meta a{color:inherit}
+.o-actions{display:flex;gap:8px;margin-top:4px}
+.o-actions .primary{min-height:42px}
+.o-actions .secondary{min-height:42px}
+.lock ul{margin:8px 0 0;padding-left:18px;color:var(--muted);font-size:13.5px;line-height:1.5}
 .guide{border-top:1px solid var(--line);padding-top:10px;font-size:13.5px}
 .guide summary{cursor:pointer;font-weight:700}
 .guide h3{font-size:13.5px;margin:12px 0 4px}
@@ -189,6 +207,14 @@ input[type=text],input[type=password],input[type=number],input[type=date],select
     <!-- Free / Pro plan, and card payments (only shown once Mars has activated this shop) -->
     <section id="plan-card" class="plan hidden" aria-live="polite"></section>
     <section id="pay-card" class="plan hidden" aria-live="polite"></section>
+
+    <!-- Pro: order list (a locked preview on the free plan) -->
+    <section class="card hidden" id="orders-card">
+      <div class="sales-head"><h2>Orders</h2>
+        <div class="periods hidden" id="o-tabs" role="group" aria-label="Which orders"><button type="button" data-otab="open" aria-pressed="true">To do</button><button type="button" data-otab="done" aria-pressed="false">Done</button></div></div>
+      <div id="orders-body"><p class="empty-note">Loading orders…</p></div>
+      <p class="msg" id="o-msg" aria-live="polite"></p>
+    </section>
 
     <section class="card" id="sales-card">
       <div class="sales-head"><h2 id="sales-title">Sales</h2>
@@ -374,7 +400,7 @@ async function loadAll() {
   state = await api('/store', { method: 'GET', headers: { 'X-Admin-Password': '' } });
   if (state.store?.name) { $('#dash-title').textContent = state.store.name; document.title = state.store.name + ' · Owner' }
   if (state.store?.brandColor) document.documentElement.style.setProperty('--brand', state.store.brandColor);
-  fillDrop(); fillSales(); fillMembers(); fillPhotos(); loadStats(); loadPlan();
+  fillDrop(); fillSales(); fillMembers(); fillPhotos(); loadStats(); loadPlan().finally(loadOrders);
   try { const m = await api('/admin/members', { method: 'GET' }); members = m.members || []; renderMembers() } catch (e) { say($('#m-msg'), e.message) }
 }
 
@@ -407,9 +433,9 @@ function renderPlan(note) {
   else if (p.state === 'pro') {
     cls = p.soon ? 'gold' : 'green';
     const until = p.proCurrentPeriodEnd ? ` Renews ${longDate(p.proCurrentPeriodEnd)}.` : '';
-    html = `<div><h2>You're on Pro</h2><p>Your processing fee is lower, and Pro features unlock here as they ship.${until}</p></div>${cancel}`;
+    html = `<div><h2>You're on Pro</h2><p>No processing fee on your orders, plus your order list below. More Pro features unlock here as they ship.${until}</p></div>${cancel}`;
   } else {
-    html = `<div><h2>Free plan</h2><p>Your app is free to use. Orders carry a small processing fee that funds it. Upgrade to Pro for a lower fee and more features.</p></div>${upgrade('Upgrade to Pro')}`;
+    html = `<div><h2>Free plan</h2><p>Your app is free to use. Orders carry a small processing fee that funds it. Upgrade to Pro for no fee and your own order list.</p></div>${upgrade('Upgrade to Pro')}`;
   }
   c.className = 'plan ' + cls; c.innerHTML = html;
   if (alertNote) { c.insertAdjacentHTML('beforeend', `<p class="msg bad">We couldn't confirm your payment yet: ${esc(alertNote)} If you were charged, it will show here soon, or contact Mars.</p>`); alertNote = '' }
@@ -438,6 +464,68 @@ $('#pro-form').addEventListener('submit', async e => {
     location.href = d.url;
   } catch (err) { btn.disabled = false; if (err.auth) { clearPw(); location.reload() } else say(msg, err.message) }
 });
+// ----- Pro: order list -----
+let orders = [], oTab = 'open', oTimer = null;
+const isPro = () => !plan || plan.state === 'none' || plan.state === 'pro';
+async function loadOrders() {
+  const card = $('#orders-card'), body = $('#orders-body');
+  card.classList.remove('hidden');
+  if (!isPro()) {
+    $('#o-tabs').classList.add('hidden');
+    body.innerHTML = `<div class="lock"><p style="margin:4px 0 0;color:var(--muted);font-size:13.5px"><b style="color:var(--ink)">A Pro feature.</b> See every order the moment it comes in, and keep track of what's done.</p>
+      <ul><li>Who ordered, what, and their phone and email</li><li>Pickup or ship, with the shipping address</li><li>Mark orders ready, picked up or shipped</li></ul>
+      <div class="btns"><button class="primary" type="button" data-upgrade>Upgrade to Pro</button></div></div>`;
+    return;
+  }
+  $('#o-tabs').classList.remove('hidden');
+  try {
+    const d = await api('/admin/orders', { method: 'GET' });
+    if (d.error) throw new Error(d.error);
+    orders = d.orders || []; renderOrders(d.note || '');
+  } catch (err) {
+    if (err.auth) { clearPw(); location.reload(); return }
+    body.innerHTML = `<p class="empty-note">${esc(err.message)}</p>`;
+  }
+  clearTimeout(oTimer); oTimer = setTimeout(() => { if (document.visibilityState === 'visible') loadOrders(); else oTimer = setTimeout(loadOrders, 60000) }, 60000);
+}
+function renderOrders(note) {
+  const open = orders.filter(o => o.status !== 'done'), done = orders.filter(o => o.status === 'done');
+  const tabs = $('#o-tabs').querySelectorAll('button');
+  tabs[0].textContent = `To do (${open.length})`; tabs[1].textContent = `Done (${done.length})`;
+  tabs.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.otab === oTab)));
+  const list = oTab === 'open' ? open : done;
+  if (!list.length) { $('#orders-body').innerHTML = `<p class="empty-note">${esc(note || (oTab === 'open' ? 'No orders waiting. New ones show up here on their own.' : 'Nothing marked done in the last 30 days.'))}</p>`; return }
+  const when = ms => { const d = new Date(ms), today = new Date().toDateString() === d.toDateString(); return today ? d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ', ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) };
+  $('#orders-body').innerHTML = '<ul class="olist">' + list.map(o => {
+    const pickup = o.fulfilment === 'pickup';
+    let actions = '';
+    if (o.status === 'new' && pickup) actions = `<button class="primary" type="button" data-st="ready" data-id="${esc(o.id)}">Mark ready for pickup</button><button class="secondary" type="button" data-st="done" data-id="${esc(o.id)}">Picked up</button>`;
+    else if (o.status === 'ready') actions = `<button class="primary" type="button" data-st="done" data-id="${esc(o.id)}">${pickup ? 'Picked up' : 'Mark shipped'}</button><button class="secondary" type="button" data-st="new" data-id="${esc(o.id)}">Not ready</button>`;
+    else if (o.status === 'new') actions = `<button class="primary" type="button" data-st="done" data-id="${esc(o.id)}">Mark shipped</button>`;
+    else actions = `<button class="secondary" type="button" data-st="new" data-id="${esc(o.id)}">Move back to To do</button>`;
+    const badge = pickup ? '<span class="badge">Pickup</span>' : '<span class="badge ship">Ship</span>';
+    const stat = o.status === 'ready' ? '<span class="badge ok">Ready</span>' : o.status === 'done' ? `<span class="badge ok">${pickup ? 'Picked up' : 'Shipped'}</span>` : '';
+    const contact = [o.phone ? `<a href="tel:${esc(o.phone)}">${esc(o.phone)}</a>` : '', o.email ? `<a href="mailto:${esc(o.email)}">${esc(o.email)}</a>` : ''].filter(Boolean).join('');
+    return `<li class="order${o.status === 'ready' ? ' ready' : ''}">
+      <div class="o-top"><b>${esc(o.name || 'Customer')}</b>${badge}${stat}${o.member ? '<span class="badge">Member</span>' : ''}<span class="o-time">${when(o.created)}</span></div>
+      <div class="o-items">${o.items.map(i => `${i.qty} × ${esc(i.name)}`).join('<br>')}</div>
+      <div class="o-meta"><span><b style="color:var(--ink)">${money(o.total)}</b> · #${esc(o.ref)}</span>${contact}</div>
+      ${o.address ? `<div class="o-meta">Ship to: ${esc(o.address)}</div>` : ''}
+      <div class="o-actions">${actions}</div></li>`;
+  }).join('') + '</ul>';
+}
+$('#orders-card').addEventListener('click', async e => {
+  if (e.target.closest('[data-upgrade]')) return openPro();
+  const tab = e.target.closest('[data-otab]'); if (tab) { oTab = tab.dataset.otab; return renderOrders() }
+  const b = e.target.closest('[data-st]'); if (!b) return;
+  b.disabled = true;
+  try {
+    const r = await api('/admin/orders/status', { method: 'POST', body: JSON.stringify({ id: b.dataset.id, status: b.dataset.st }) });
+    const o = orders.find(x => x.id === r.id); if (o) { o.status = r.status; o.statusAt = r.at }
+    renderOrders(); say($('#o-msg'), '');
+  } catch (err) { b.disabled = false; if (err.auth) { clearPw(); location.reload() } else say($('#o-msg'), err.message) }
+});
+
 async function cancelPro() {
   if (!confirm("Cancel Pro? It stays active until the end of the period you've already paid for, then you're back on the free plan.")) return;
   try { plan = await api('/admin/plan/cancel', { method: 'POST', body: '{}' }); renderPlan() }
