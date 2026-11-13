@@ -228,7 +228,8 @@ async function shopPage(env, slug, rest, origin, rec) {
   if (rest === '/' || rest === '/index.html' || rest === '/shop.html') {
     const cfg = await shopConfigFor(env, slug, origin);
     const html = PAGES['shop.html'].replace(/(<script[^>]*id=["']shop-config["'][^>]*>)[\s\S]*?(<\/script>)/i, (_, a, b) => a + escJson(cfg) + b)
-      .replace(/<title>[^<]*<\/title>/, `<title>${escHtml(cfg.store.name)}</title>`);
+      .replace(/<title>[^<]*<\/title>/, `<title>${escHtml(cfg.store.name)}</title>`)
+      .replace('href="apple-touch-icon.png"', `href="apple-touch-icon.png${cfg.store.logo ? '?' + (cfg.store.logo.split('?')[1] || '') : ''}"`);
     return page('shop.html', html);
   }
   if (rest === '/privacy.html') return page('privacy.html');
@@ -238,9 +239,10 @@ async function shopPage(env, slug, rest, origin, rec) {
     const cfg = await shopConfigFor(env, slug, origin), owner = rest.startsWith('/owner');
     const color = cfg.store.brandColor || '#072448', name = cfg.store.name || 'Shop';
     const icon = owner ? '../owner-icon' : 'icon';
+    const v = !owner && cfg.store.logo ? '?' + (cfg.store.logo.split('?')[1] || '') : '';
     const m = { name: owner ? `${name} Owner` : name, short_name: owner ? 'Owner' : name.slice(0, 12), description: owner ? `Run ${name}: drops, sales, products, orders and members.` : `${name}: shop, member prices, drops and rewards.`,
       id: './', start_url: './', scope: './', display: 'standalone', background_color: color, theme_color: color,
-      icons: [{ src: `${icon}-192.png`, sizes: '192x192', type: 'image/png' }, { src: `${icon}-512.png`, sizes: '512x512', type: 'image/png' }, { src: `${icon}-maskable-512.png`, sizes: '512x512', type: 'image/png', purpose: 'maskable' }] };
+      icons: [{ src: `${icon}-192.png${v}`, sizes: '192x192', type: 'image/png' }, { src: `${icon}-512.png${v}`, sizes: '512x512', type: 'image/png' }, { src: `${icon}-maskable-512.png${v}`, sizes: '512x512', type: 'image/png', purpose: 'maskable' }] };
     return new Response(JSON.stringify(m), { headers: { 'Content-Type': 'application/manifest+json', 'Cache-Control': 'no-cache' } });
   }
   if (rest === '/owner/') {
@@ -249,6 +251,13 @@ async function shopPage(env, slug, rest, origin, rec) {
   }
   if (rest === '/owner/sw.js') return page('owner-sw.js');
   const file = rest.slice(1);
+  // the shop's own logo, when the owner uploaded one
+  const LOGO = { 'icon-512.png': '512', 'icon-maskable-512.png': 'maskable', 'icon-192.png': '192', 'apple-touch-icon.png': '180' };
+  if (LOGO[file]) {
+    const kv = tenantEnv(env, slug, origin, null).SHOP;
+    const img = await kv.get('logo:' + LOGO[file], 'arrayBuffer');
+    if (img) return new Response(img, { headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=300' } });
+  }
   if (/^(icon-192|icon-512|icon-maskable-512|apple-touch-icon|owner-icon-192|owner-icon-512|owner-icon-maskable-512|owner-apple-touch-icon)\.png$/.test(file)) return asset(file);
   return notFoundPage();
 }

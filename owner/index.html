@@ -36,6 +36,12 @@ header small{display:block;color:var(--muted);font-size:13px}
 label{display:block;font-size:13px;font-weight:600;margin:12px 0 5px}
 input[type=text],input[type=password],input[type=number],input[type=date],select{width:100%;min-height:46px;border:1px solid var(--line);border-radius:11px;padding:10px 12px;background:var(--panel);font-size:16px}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.hint{margin:4px 0 8px;font-size:13px;opacity:.75}
+.logo-row{display:flex;align-items:center;gap:14px}
+.logo-prev{width:72px;height:72px;border-radius:16px;background:var(--brand);color:#fff;display:grid;place-items:center;font-weight:800;font-size:22px;overflow:hidden;flex:none;box-shadow:0 1px 4px rgba(0,0,0,.15)}
+.logo-prev img{width:100%;height:100%;object-fit:cover}
+.logo-btns{display:flex;flex-wrap:wrap;gap:8px}
+.logo-btns button{margin:0}
 .check{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:14px;font-weight:500}
 .check input{width:20px;height:20px;accent-color:var(--brand)}
 .btns{display:flex;gap:10px;margin-top:16px}
@@ -345,6 +351,17 @@ input[type=color]{width:100%;height:46px;border:1px solid var(--line);border-rad
         <div><label for="sd-phone">Phone</label><input id="sd-phone" type="tel" maxlength="30"></div>
         <div><label for="sd-email">Email</label><input id="sd-email" type="email" maxlength="120"></div>
       </div>
+      <label for="sd-logo">Logo</label>
+      <p class="hint">Becomes your shop's app icon and shows in the app's header. A square picture works best.</p>
+      <div class="logo-row">
+        <div class="logo-prev" id="sd-logo-prev"></div>
+        <div class="logo-btns">
+          <input id="sd-logo" type="file" accept="image/*" hidden>
+          <button class="secondary" type="button" id="sd-logo-pick">Upload logo</button>
+          <button class="secondary hidden" type="button" id="sd-logo-rm">Remove</button>
+        </div>
+      </div>
+      <p class="msg" id="sd-logo-msg" aria-live="polite"></p>
       <div class="two">
         <div><label for="sd-brand">Main color</label><input id="sd-brand" type="color"></div>
         <div><label for="sd-accent">Accent color</label><input id="sd-accent" type="color"></div>
@@ -636,7 +653,58 @@ function fillDetails() {
   $('#sd-phone').value = s.phone || ''; $('#sd-email').value = s.email || '';
   $('#sd-brand').value = s.brandColor || '#072448'; $('#sd-accent').value = s.colors?.accent || '#ff6150';
   $('#sd-ship').checked = !!sh.enabled; $('#sd-flat').value = sh.flat || '';
+  showLogo();
 }
+function showLogo() {
+  const s = catalog?.store || {}, box = $('#sd-logo-prev');
+  box.style.background = s.brandColor || '#072448';
+  if (s.logo) { box.innerHTML = ''; const img = new Image(); img.alt = 'Your logo'; img.src = SHOP_URL + s.logo; box.appendChild(img) }
+  else box.textContent = s.initials || (s.name || 'S').slice(0, 2).toUpperCase();
+  $('#sd-logo-rm').classList.toggle('hidden', !s.logo);
+}
+// Draw the logo into the square PNG icons phones use. The logo sits on white, fitted
+// inside the square; the maskable one gets extra room because Android trims its edges.
+function logoPng(img, size, fill) {
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const g = c.getContext('2d'); g.fillStyle = '#ffffff'; g.fillRect(0, 0, size, size);
+  const box = size * fill, k = Math.min(box / img.naturalWidth, box / img.naturalHeight);
+  const w = img.naturalWidth * k, h = img.naturalHeight * k;
+  g.imageSmoothingQuality = 'high'; g.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+  return new Promise(r => c.toBlob(r, 'image/png'));
+}
+async function sendLogo(fd) {
+  let res;
+  try { res = await fetch(SHOP_API.replace(/\/+$/, '') + '/admin/logo', { method: 'POST', headers: { 'X-Admin-Password': pw }, body: fd }) }
+  catch { throw new Error("Can't reach the internet. Check your connection.") }
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401) { const e = new Error('Wrong password'); e.auth = true; throw e }
+  if (!res.ok) throw new Error(data.error || `Something went wrong (${res.status})`);
+  return data;
+}
+$('#sd-logo-pick').addEventListener('click', () => $('#sd-logo').click());
+$('#sd-logo').addEventListener('change', async e => {
+  const file = e.target.files[0], m = $('#sd-logo-msg'); e.target.value = '';
+  if (!file) return;
+  if (!file.type.startsWith('image/')) return say(m, 'Pick a picture file for your logo.');
+  say(m, 'Uploading your logo…', true);
+  try {
+    const url = URL.createObjectURL(file), img = new Image();
+    await new Promise((ok, bad) => { img.onload = ok; img.onerror = () => bad(new Error("That picture couldn't be opened. Try a PNG or JPG.")); img.src = url });
+    const fd = new FormData();
+    fd.append('512', await logoPng(img, 512, 0.9), 'icon-512.png');
+    fd.append('maskable', await logoPng(img, 512, 0.7), 'icon-maskable-512.png');
+    fd.append('192', await logoPng(img, 192, 0.9), 'icon-192.png');
+    fd.append('180', await logoPng(img, 180, 0.9), 'apple-touch-icon.png');
+    URL.revokeObjectURL(url);
+    catalog = await sendLogo(fd); showLogo();
+    say(m, 'Logo saved. New installs get it as the app icon. Phones that already installed the shop update the icon on their own over time.', true);
+  } catch (err) { if (err.auth) { clearPw(); location.reload() } else say(m, err.message) }
+});
+$('#sd-logo-rm').addEventListener('click', async () => {
+  const m = $('#sd-logo-msg'); say(m, 'Removing…', true);
+  try { const fd = new FormData(); fd.append('remove', '1'); catalog = await sendLogo(fd); showLogo(); say(m, 'Logo removed. Your shop uses the standard icon again.', true) }
+  catch (err) { if (err.auth) { clearPw(); location.reload() } else say(m, err.message) }
+});
 $('#details-form').addEventListener('submit', async e => {
   e.preventDefault(); const m = $('#sd-msg');
   const store = { name: $('#sd-name').value, tagline: $('#sd-tag').value, address: $('#sd-addr').value, hours: $('#sd-hours').value, phone: $('#sd-phone').value, email: $('#sd-email').value, brandColor: $('#sd-brand').value, accent: $('#sd-accent').value };

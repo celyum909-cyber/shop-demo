@@ -274,6 +274,30 @@ export default {
         return json(next);
       }
 
+      // Self-serve shops: the owner's logo becomes the shop's home-screen icon. The owner app
+      // draws it into square PNGs on the phone (512, maskable 512, 192, 180) and sends them here.
+      if (env.TENANT && POST && path === '/admin/logo') {
+        if (!(await checkPassword(request, env))) return denied();
+        const form = await request.formData().catch(() => null);
+        if (!form) return json({ error: 'Bad request' }, 400);
+        const cur = await loadConfig(env);
+        const sizes = ['512', 'maskable', '192', '180'];
+        let logo = '';
+        if (form.get('remove') === '1') {
+          await Promise.all(sizes.map(k => env.SHOP.delete('logo:' + k)));
+        } else {
+          const files = sizes.map(k => form.get(k));
+          if (files.some(f => !f || typeof f !== 'object' || !f.size)) return json({ error: 'The logo did not come through. Try again.' }, 400);
+          if (files.some(f => f.size > 1024 * 1024 || f.type !== 'image/png')) return json({ error: 'That logo is too big. Try a smaller picture.' }, 400);
+          await Promise.all(sizes.map(async (k, i) => env.SHOP.put('logo:' + k, await files[i].arrayBuffer())));
+          logo = 'icon-512.png?v=' + Date.now();
+        }
+        const next = { ...cur, store: { ...cur.store, logo } };
+        await env.SHOP.put('config', JSON.stringify(next));
+        tenantCache.set(env.TENANT, { cfg: next, at: Date.now() });
+        return json(next);
+      }
+
       if (POST && path === '/admin/photo') {
         if (!(await checkPassword(request, env))) return denied();
         const form = await request.formData();
