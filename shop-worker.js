@@ -256,6 +256,23 @@ export default {
         return res;
       }
 
+      // Self-serve shops: the owner edits their shop details and products (kept in KV).
+      if (env.TENANT && GET && path === '/admin/catalog') {
+        if (!(await checkPassword(request, env))) return denied();
+        return json(await loadConfig(env), 200, { 'Cache-Control': 'no-store' });
+      }
+      if (env.TENANT && POST && path === '/admin/catalog') {
+        if (!(await checkPassword(request, env))) return denied();
+        const b = await request.json().catch(() => null);
+        if (!b) return json({ error: 'Bad request' }, 400);
+        const cur = await loadConfig(env);
+        const next = cleanCatalog(b, cur);
+        if (next.error) return json({ error: next.error }, 400);
+        await env.SHOP.put('config', JSON.stringify(next));
+        tenantCache.set(env.TENANT, { cfg: next, at: Date.now() });
+        return json(next);
+      }
+
       if (POST && path === '/admin/photo') {
         if (!(await checkPassword(request, env))) return denied();
         const form = await request.formData();
@@ -715,7 +732,16 @@ async function checkMars(request, env) {
 
 // ---------- Helpers ----------
 let cached = null, cachedAt = 0;
+const tenantCache = new Map(); // slug -> { cfg, at }
 async function loadConfig(env) {
+  // Self-serve shops (multi-shop Worker) keep their catalog in KV, edited from the owner app.
+  if (env.TENANT) {
+    const hit = tenantCache.get(env.TENANT);
+    if (hit && Date.now() - hit.at < 10_000) return hit.cfg;
+    const cfg = (await env.SHOP.get('config', 'json')) || starterConfig('Your shop', '');
+    tenantCache.set(env.TENANT, { cfg, at: Date.now() });
+    return cfg;
+  }
   if (cached && Date.now() - cachedAt < 60_000) return cached;
   if (!env.SITE_URL) throw new Error('SITE_URL is not set');
   const res = await fetch(env.SITE_URL, { cf: { cacheTtl: 60 } });
@@ -727,6 +753,49 @@ async function loadConfig(env) {
   if (!Array.isArray(cfg.products)) throw new Error('shop-config has no products');
   cached = cfg; cachedAt = Date.now();
   return cfg;
+}
+// A new self-serve shop's starting catalog: their name, no products yet.
+function starterConfig(name, email) {
+  const initials = String(name).split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('') || 'S';
+  return {
+    store: { name, tagline: '', initials, logo: '', brandColor: '#072448', colors: { brand: '#072448', accent: '#ff6150', member: '#4ed4d2', reward: '#ffcb00', highlight: '#f8a94b' }, address: '', hours: '', phone: '', email: email || '', shareUrl: '' },
+    privacy: { page: 'privacy.html', effective: new Date().toISOString().slice(0, 10), host: 'Cloudflare', reviewed: false },
+    api: '',
+    shipping: { enabled: false, flat: 0 },
+    rewards: { enabled: true, punchValue: 20, punches: 10, reward: 'a free item' },
+    members: { enabled: true, percentOff: 10, perks: ['Member prices on everything', 'Members-only drops', 'A rewards punch on every order of $20 or more'] },
+    categories: [],
+    products: [],
+  };
+}
+const HEX = /^#[0-9a-fA-F]{6}$/;
+function cleanCatalog(b, cur) {
+  const t = (v, n) => (typeof v === 'string' ? v.trim().slice(0, n) : '');
+  const s = b.store || {}, curS = cur.store || {};
+  const name = t(s.name, 60) || curS.name;
+  if (!name) return { error: 'Your shop needs a name' };
+  const brand = HEX.test(s.brandColor) ? s.brandColor : curS.brandColor || '#072448';
+  const accent = HEX.test(s.accent) ? s.accent : curS.colors?.accent || '#ff6150';
+  const store = { ...curS, name, tagline: t(s.tagline, 80), address: t(s.address, 120), hours: t(s.hours, 120), phone: t(s.phone, 30), email: t(s.email, 120),
+    initials: name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join(''), brandColor: brand, colors: { ...(curS.colors || {}), brand, accent } };
+  const list = Array.isArray(b.products) ? b.products : cur.products;
+  if (list.length > 100) return { error: 'Up to 100 products' };
+  const ids = new Set(), products = [];
+  for (const p of list) {
+    const pname = t(p.name, 60); if (!pname) return { error: 'Every product needs a name' };
+    const price = Math.round(Number(p.price) * 100) / 100;
+    if (!(price >= 0.5 && price <= 10000)) return { error: `Check the price for ${pname} (between $0.50 and $10,000)` };
+    let id = typeof p.id === 'string' && /^[a-z0-9-]{1,40}$/.test(p.id) ? p.id : '';
+    if (!id || ids.has(id)) id = (pname.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30) || 'item') + '-' + Math.random().toString(36).slice(2, 6);
+    ids.add(id);
+    const sizes = (Array.isArray(p.sizes) ? p.sizes : String(p.sizes || '').split(',')).map(x => t(String(x), 12)).filter(Boolean).slice(0, 12);
+    products.push({ id, name: pname, category: t(p.category, 30) || 'Products', price, sizes: sizes.length ? sizes : ['One size'], desc: t(p.desc, 300), color: HEX.test(p.color) ? p.color : brand });
+  }
+  const categories = [...new Set(products.map(p => p.category))];
+  const sh = b.shipping || cur.shipping || {};
+  const flat = Math.round(Number(sh.flat) * 100) / 100;
+  const shipping = { enabled: !!sh.enabled && flat >= 0 && flat <= 100, flat: flat >= 0 && flat <= 100 ? flat : 0 };
+  return { ...cur, store, products, categories, shipping };
 }
 async function getSettings(env) {
   return (await env.SHOP.get('settings', 'json')) || { drop: null, sales: {}, memberPercent: null, photos: {}, updated: 0 };

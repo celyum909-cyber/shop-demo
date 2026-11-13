@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Shops · Mars</title>
+<link rel="icon" href="/favicon.ico">
+<style>
+:root{--brand:#072448;--gold:#f5c542;--ink:#0e1a2b;--muted:#5f6b7a;--line:#e1e5ec;--bg:#f5f6f8;--panel:#fff;--bad:#c2462f;--ok:#2d7a4b}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:var(--brand);color:#fff;padding:18px 20px}
+header h1{margin:0;font-size:20px}header small{color:rgba(255,255,255,.75)}
+main{max-width:1100px;margin:0 auto;padding:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+label{display:block;font-size:13px;font-weight:650;margin-bottom:6px}
+input{min-height:44px;border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:16px;width:100%}
+.row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}.row>div{flex:1;min-width:200px}
+button{min-height:44px;border:0;border-radius:10px;background:var(--brand);color:#fff;font-weight:750;padding:0 16px;cursor:pointer}
+button.alt{background:#fff;color:var(--ink);border:1px solid var(--line)}
+button.small{min-height:34px;font-size:13px;padding:0 10px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:14px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+.tile b{display:block;font-size:26px}.tile span{color:var(--muted);font-size:13px}
+.tbl{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+td small{color:var(--muted)}
+.badge{display:inline-block;font-size:11.5px;font-weight:800;padding:2px 8px;border-radius:999px;border:1px solid var(--line)}
+.badge.pro{color:var(--ok);border-color:var(--ok)}.badge.on{color:var(--ok)}.badge.none{color:var(--bad)}
+.msg{min-height:18px;font-size:14px;margin:8px 0 0}.msg.bad{color:var(--bad)}.msg.ok{color:var(--ok)}
+.code{font-family:ui-monospace,Menlo,monospace;background:#fff6cc;border:1px solid var(--gold);border-radius:8px;padding:6px 10px;display:inline-block;margin-top:6px}
+a{color:var(--brand)}
+</style>
+</head>
+<body>
+<header><h1>Shops</h1><small>Mars only. Every self-serve shop, its plan, and the fees you've earned.</small></header>
+<main>
+  <form class="card" id="auth">
+    <div class="row"><div><label for="pw">Mars password</label><input id="pw" type="password" autocomplete="current-password"></div><button type="submit">Show shops</button></div>
+    <p class="msg" id="msg"></p>
+  </form>
+  <div id="out" hidden>
+    <div class="tiles">
+      <div class="tile"><b id="t-count">–</b><span>shops</span></div>
+      <div class="tile"><b id="t-pro">–</b><span>on Pro ($39/mo each)</span></div>
+      <div class="tile"><b id="t-fees">–</b><span>processing fees, last 30 days</span></div>
+      <div class="tile"><b id="t-new">–</b><span>new this week</span></div>
+    </div>
+    <div class="card tbl">
+      <table><thead><tr><th>Shop</th><th>Owner</th><th>Signed up</th><th>Plan</th><th>Card payments</th><th>Fees (30 days)</th><th></th></tr></thead><tbody id="rows"></tbody></table>
+      <p class="msg" id="rmsg"></p>
+    </div>
+  </div>
+</main>
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const KEY = 'mars-pw';
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const day = ms => ms ? new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '–';
+const money = n => '$' + Number(n || 0).toFixed(2);
+function say(el, t, ok) { el.textContent = t; el.className = 'msg ' + (ok ? 'ok' : 'bad') }
+async function call(path, opts = {}) {
+  const r = await fetch(path, { ...opts, headers: { 'Content-Type': 'application/json', 'X-Mars-Password': $('#pw').value, ...(opts.headers || {}) } });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || 'Error ' + r.status);
+  return d;
+}
+async function load() {
+  say($('#msg'), 'Loading…', true);
+  try {
+    const d = await call('/api/mars/shops');
+    try { sessionStorage.setItem(KEY, $('#pw').value) } catch {}
+    $('#out').hidden = false; say($('#msg'), d.feeError ? 'Fees could not be read from Stripe: ' + d.feeError : '', true);
+    $('#t-count').textContent = d.count; $('#t-pro').textContent = d.pro; $('#t-fees').textContent = money(d.fees30);
+    $('#t-new').textContent = d.shops.filter(s => s.created > Date.now() - 7 * 864e5).length;
+    $('#rows').innerHTML = d.shops.length ? d.shops.map(s => `<tr>
+      <td><b>${esc(s.name)}</b><br><a href="/${esc(s.slug)}/" target="_blank" rel="noopener">/${esc(s.slug)}</a></td>
+      <td>${esc(s.email)}<br><small>${s.ownerPassword ? 'password set' : 'no password yet'}</small></td>
+      <td>${day(s.created)}</td>
+      <td><span class="badge ${s.state === 'pro' ? 'pro' : ''}">${s.state === 'pro' ? 'Pro' : 'Free'}</span>${s.proUntil ? `<br><small>to ${day(s.proUntil)}</small>` : ''}</td>
+      <td><span class="badge ${s.payments}">${{ on: 'On', started: 'Started', none: 'Not set up' }[s.payments]}</span></td>
+      <td>${money(s.fees30)}<br><small>${s.feeOrders30} order${s.feeOrders30 === 1 ? '' : 's'}</small></td>
+      <td><button class="alt small" type="button" data-reset="${esc(s.slug)}">Reset password</button><div data-code="${esc(s.slug)}"></div></td></tr>`).join('')
+      : '<tr><td colspan="7" style="color:var(--muted)">No shops yet. They show up here as soon as someone signs up.</td></tr>';
+  } catch (err) { say($('#msg'), err.message) }
+}
+$('#auth').addEventListener('submit', e => { e.preventDefault(); load() });
+$('#rows').addEventListener('click', async e => {
+  const b = e.target.closest('[data-reset]'); if (!b) return;
+  const slug = b.dataset.reset;
+  if (!confirm(`Reset the owner password for /${slug}? Their current password stops working, and you'll get a one-time setup code to give them.`)) return;
+  try {
+    const d = await call(`/api/mars/shops/${slug}/reset-password`, { method: 'POST', body: '{}' });
+    document.querySelector(`[data-code="${slug}"]`).innerHTML = `<div class="code">${esc(d.code)}</div><br><small>Give this code to the owner. They sign in with it once and pick a new password.</small>`;
+  } catch (err) { say($('#rmsg'), err.message) }
+});
+try { const s = sessionStorage.getItem(KEY); if (s) { $('#pw').value = s; load() } } catch {}
+</script>
+</body>
+</html>

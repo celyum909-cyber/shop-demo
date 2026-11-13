@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Start your shop app free · Celyum Digital</title>
+<meta name="description" content="Your own shop app for your customers' phones. Free to start, no app store. Member prices, weekly drops, a rewards card and card payments.">
+<meta name="theme-color" content="#072448">
+<link rel="icon" href="/favicon.ico">
+<style>
+:root{--brand:#072448;--gold:#f5c542;--ink:#0e1a2b;--muted:#5f6b7a;--line:#e1e5ec;--bg:#f5f6f8;--panel:#fff;--bad:#c2462f;--ok:#2d7a4b}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);line-height:1.45}
+.hero{background:var(--brand);color:#fff;padding:36px 20px 72px}
+.wrap{max-width:560px;margin:0 auto}
+.brand{font-weight:800;letter-spacing:.08em;font-size:13px;color:var(--gold);text-transform:uppercase}
+h1{font-size:34px;line-height:1.05;margin:10px 0 10px;letter-spacing:-.02em}
+.hero p{margin:0;color:rgba(255,255,255,.85);font-size:16.5px}
+.perks{list-style:none;padding:0;margin:18px 0 0;display:grid;gap:6px;font-size:15px}
+.perks li::before{content:"✓";color:var(--gold);font-weight:800;margin-right:8px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:20px;margin:-48px auto 24px;box-shadow:0 10px 30px rgba(7,36,72,.12)}
+label{display:block;font-size:13.5px;font-weight:650;margin:14px 0 6px}
+input[type=text],input[type=email],input[type=password]{width:100%;min-height:48px;border:1px solid var(--line);border-radius:12px;padding:11px 13px;font-size:16px;background:#fff;color:var(--ink)}
+input:focus-visible{outline:3px solid color-mix(in srgb,var(--brand) 35%,transparent);outline-offset:1px}
+.hint{font-size:13px;color:var(--muted);margin:6px 0 0;word-break:break-all}
+.hint b{color:var(--ink)}
+.check{display:flex;gap:10px;align-items:flex-start;font-weight:400;font-size:14px;margin-top:16px}
+.check input{width:20px;height:20px;margin-top:1px;flex:none}
+button{width:100%;min-height:52px;border:0;border-radius:13px;background:var(--brand);color:#fff;font-size:17px;font-weight:800;margin-top:18px;cursor:pointer}
+button:disabled{opacity:.6}
+.msg{min-height:20px;margin:10px 0 0;font-size:14px}
+.msg.bad{color:var(--bad)}.msg.ok{color:var(--ok)}
+.fine{font-size:12.5px;color:var(--muted);margin:14px 0 0;text-align:center}
+.done h2{margin:0 0 6px;color:var(--ok)}
+.done a.go{display:block;text-align:center;background:var(--brand);color:#fff;text-decoration:none;font-weight:800;border-radius:13px;padding:15px;margin-top:16px}
+.done .links{font-size:14px;margin-top:14px;word-break:break-all}
+a{color:var(--brand)}
+</style>
+</head>
+<body>
+<header class="hero"><div class="wrap">
+  <div class="brand">Celyum Digital</div>
+  <h1>Your shop, in your customers' pockets.</h1>
+  <p>A branded app for your shop. Customers scan your counter sign, and it's on their home screen. No app store.</p>
+  <ul class="perks"><li>Free to start: no monthly fee, no setup fee</li><li>Member prices, weekly drops and a rewards card</li><li>Card payments straight to your bank</li><li>Pro ($39/month) when you want your order list and no processing fee</li></ul>
+</div></header>
+
+<main class="wrap">
+  <form class="card" id="f" novalidate>
+    <h2 style="margin:0 0 4px;font-size:20px">Start your shop app</h2>
+    <p class="hint" style="margin:0">Takes about a minute. You'll add products next.</p>
+    <label for="shop">Shop name</label>
+    <input id="shop" type="text" maxlength="60" autocomplete="organization" required placeholder="e.g. Jerry's Shoe Store">
+    <p class="hint" id="addr">Your shop's address: <b>…</b></p>
+    <label for="owner">Your name</label>
+    <input id="owner" type="text" maxlength="60" autocomplete="name">
+    <label for="email">Email</label>
+    <input id="email" type="email" maxlength="120" autocomplete="email" required>
+    <label for="pw">Choose a password</label>
+    <input id="pw" type="password" minlength="8" autocomplete="new-password" required>
+    <p class="hint">At least 8 characters. You'll use it to sign in to your owner app.</p>
+    <label class="check"><input type="checkbox" id="agree"> <span>I agree to the <a href="/terms" target="_blank" rel="noopener">shop owner terms</a>: free to use, with a 0.5% fee on card orders (none on Pro).</span></label>
+    <button type="submit" id="go">Create my shop</button>
+    <p class="msg" id="msg" aria-live="polite"></p>
+    <p class="fine">Questions? <a href="https://www.celyumdigitalsolutions.com">celyumdigitalsolutions.com</a> · 716-393-8840</p>
+  </form>
+
+  <section class="card done" id="done" hidden aria-live="polite">
+    <h2>Your shop is ready!</h2>
+    <p>Next, your owner app opens: add your products, then set up card payments. Your QR codes are in there too.</p>
+    <a class="go" id="go-owner" href="#">Open my owner app</a>
+    <div class="links">Your shop: <a id="shop-link" href="#" target="_blank" rel="noopener"></a></div>
+    <p class="hint">Tip: on your phone, add the owner app to your home screen so it's one tap away.</p>
+  </section>
+</main>
+
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const slugOf = v => v.toLowerCase().replace(/['’]/g, '').replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 36).replace(/-+$/, '');
+const showAddr = () => { const s = slugOf($('#shop').value); $('#addr').innerHTML = 'Your shop\'s address: <b>' + location.host + '/' + (s || '…') + '</b>' };
+$('#shop').addEventListener('input', showAddr); showAddr();
+function say(t, ok) { $('#msg').textContent = t; $('#msg').className = 'msg ' + (ok ? 'ok' : 'bad') }
+$('#f').addEventListener('submit', async e => {
+  e.preventDefault();
+  const body = { shop: $('#shop').value.trim(), owner: $('#owner').value.trim(), email: $('#email').value.trim(), password: $('#pw').value, agree: $('#agree').checked };
+  if (body.shop.length < 2) return say("Type your shop's name.");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) return say('Type a valid email address.');
+  if (body.password.length < 8) return say('Your password needs at least 8 characters.');
+  if (!body.agree) return say('Please tick the box to agree to the terms.');
+  $('#go').disabled = true; say('Creating your shop…', true);
+  try {
+    const r = await fetch('/api/signup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'Something went wrong. Please try again.');
+    // Sign straight in to the owner app on this device (this browser tab only).
+    try { sessionStorage.setItem('shop-owner-pw:' + d.slug, body.password) } catch {}
+    $('#f').hidden = true; $('#done').hidden = false;
+    $('#go-owner').href = d.ownerUrl; $('#shop-link').href = d.shopUrl; $('#shop-link').textContent = d.shopUrl;
+    setTimeout(() => { location.href = d.ownerUrl }, 2500);
+  } catch (err) { say(err.message); $('#go').disabled = false }
+});
+</script>
+</body>
+</html>
