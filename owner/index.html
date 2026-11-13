@@ -321,6 +321,18 @@ input[type=color]{width:100%;height:46px;border:1px solid var(--line);border-rad
       <ul class="mlist" id="m-list"></ul>
     </form>
 
+    <!-- Pro: email every member -->
+    <form class="card" id="msg-form">
+      <h2>Message your members</h2>
+      <div id="msg-body">
+        <p>Send a deal or announcement to every member by email. One message a day. Each email has an unsubscribe link.</p>
+        <label for="msg-subj">Subject</label><input id="msg-subj" type="text" maxlength="120" placeholder="e.g. 20% off this weekend for members">
+        <label for="msg-text">Message</label><textarea id="msg-text" maxlength="4000" rows="6" placeholder="Write it like a text to a regular. A link to your shop is added at the end."></textarea>
+        <div class="btns"><button class="primary" type="submit">Send to members</button><button class="secondary" type="button" id="msg-test">Send me a test</button></div>
+      </div>
+      <p class="msg" id="msg-msg" aria-live="polite"></p>
+    </form>
+
     <!-- Self-serve shops only: name, contact details, colors, shipping -->
     <form class="card hidden" id="details-form">
       <h2>Shop details</h2>
@@ -478,7 +490,7 @@ async function loadAll() {
   state = await api('/store', { method: 'GET', headers: { 'X-Admin-Password': '' } });
   if (state.store?.name) { $('#dash-title').textContent = state.store.name; document.title = state.store.name + ' · Owner' }
   if (state.store?.brandColor) document.documentElement.style.setProperty('--brand', state.store.brandColor);
-  fillDrop(); fillSales(); fillMembers(); fillPhotos(); loadStats(); loadPlan().finally(() => { loadOrders(); renderStart() });
+  fillDrop(); fillSales(); fillMembers(); fillPhotos(); loadStats(); loadPlan().finally(() => { loadOrders(); renderStart(); syncMsgCard() });
   if (TENANT) await loadCatalog();
   try { const m = await api('/admin/members', { method: 'GET' }); members = m.members || []; renderMembers() } catch (e) { say($('#m-msg'), e.message) }
 }
@@ -665,6 +677,27 @@ $('#qr-print').onclick = () => {
   w.document.close();
 };
 
+// ----- Pro: message members by email -----
+function renderMsgCard() {
+  const locked = !isPro();
+  $('#msg-body').innerHTML = locked
+    ? `<div class="lock"><p style="margin:4px 0 0;color:var(--muted);font-size:13.5px"><b style="color:var(--ink)">A Pro feature.</b> Email a deal or announcement to all your members, and customers get an email when their order is ready.</p><div class="btns"><button class="primary" type="button" data-upgrade>Upgrade to Pro</button></div></div>`
+    : $('#msg-body').innerHTML;
+}
+const MSG_BODY_HTML = document.getElementById('msg-body').innerHTML;
+async function sendMembers(test) {
+  const m = $('#msg-msg'), subject = $('#msg-subj').value.trim(), message = $('#msg-text').value.trim();
+  if (!subject || !message) return say(m, 'Add a subject and a message.');
+  const count = members.filter(x => !x.optOut).length;
+  if (!test && !confirm(`Email this to ${count} member${count === 1 ? '' : 's'}? You can send one message a day.`)) return;
+  say(m, 'Sending…', true);
+  try { const r = await api('/admin/members/message', { method: 'POST', body: JSON.stringify({ subject, message, test }) }); say(m, test ? 'Test sent to your shop email.' : `Sent to ${r.sent} member${r.sent === 1 ? '' : 's'}.`, true); if (!test) { $('#msg-subj').value = ''; $('#msg-text').value = '' } }
+  catch (err) { if (err.auth) { clearPw(); location.reload() } else say(m, err.message) }
+}
+$('#msg-form').addEventListener('submit', e => { e.preventDefault(); sendMembers(false) });
+$('#msg-form').addEventListener('click', e => { if (e.target.closest('#msg-test')) sendMembers(true); if (e.target.closest('[data-upgrade]')) openPro() });
+function syncMsgCard() { $('#msg-body').innerHTML = isPro() ? MSG_BODY_HTML : ''; if (!isPro()) renderMsgCard() }
+
 // ----- Pro: order list -----
 let orders = [], oTab = 'open', oTimer = null;
 const isPro = () => !plan || plan.state === 'none' || plan.state === 'pro';
@@ -723,7 +756,7 @@ $('#orders-card').addEventListener('click', async e => {
   try {
     const r = await api('/admin/orders/status', { method: 'POST', body: JSON.stringify({ id: b.dataset.id, status: b.dataset.st }) });
     const o = orders.find(x => x.id === r.id); if (o) { o.status = r.status; o.statusAt = r.at }
-    renderOrders(); say($('#o-msg'), '');
+    renderOrders(); say($('#o-msg'), r.emailNote || (r.emailed ? `${o?.name || 'The customer'} was emailed that their order is ${r.status === 'ready' ? 'ready' : 'on its way'}.` : ''), !r.emailNote);
   } catch (err) { b.disabled = false; if (err.auth) { clearPw(); location.reload() } else say($('#o-msg'), err.message) }
 });
 

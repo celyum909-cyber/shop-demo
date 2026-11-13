@@ -73,6 +73,7 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/+$/, '') || '/';
+    if (!env.API_BASE) env = { ...env, API_BASE: url.origin }; // used for unsubscribe links
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors() });
 
     try {
@@ -366,11 +367,18 @@ export default {
         const status = ['new', 'ready', 'done'].includes(b.status) ? b.status : '';
         if (!id || !status) return json({ error: 'Bad request' }, 400);
         const all = (await env.SHOP.get(ORDER_STATUS_KEY, 'json')) || {};
-        if (status === 'new') delete all[id]; else all[id] = { status, at: Date.now() };
+        const prev = all[id];
+        if (status === 'new') delete all[id]; else all[id] = { status, at: Date.now(), emailed: prev?.emailed || [] };
+        // Pro: tell the customer by email (once per status) when their order is ready or shipped.
+        let emailed = false, emailNote = '';
+        if (status !== 'new' && env.RESEND_API_KEY && b.notify !== false && !all[id].emailed.includes(status)) {
+          try { emailed = await emailOrderStatus(env, id, status); if (emailed) all[id].emailed = [...all[id].emailed, status] }
+          catch (e) { emailNote = 'Status saved, but the email to the customer did not send: ' + e.message }
+        }
         // Keep the newest 500 so the record never grows without limit.
         const kept = Object.fromEntries(Object.entries(all).sort((a, b) => b[1].at - a[1].at).slice(0, 500));
         await env.SHOP.put(ORDER_STATUS_KEY, JSON.stringify(kept));
-        return json({ ok: true, id, status: kept[id]?.status || 'new', at: kept[id]?.at || null });
+        return json({ ok: true, id, status: kept[id]?.status || 'new', at: kept[id]?.at || null, emailed, emailNote });
       }
 
       if (GET && path === '/admin/stats') {
@@ -385,6 +393,42 @@ export default {
         if (!email) return json({ error: 'No email given' }, 400);
         await env.SHOP.delete('member:' + email);
         return json({ ok: true });
+      }
+
+      // Pro: email every member who hasn't unsubscribed. One message a day per shop.
+      if (POST && path === '/admin/members/message') {
+        if (!(await checkPassword(request, env))) return denied();
+        const gate = await proGate(env); if (gate) return gate;
+        if (!env.RESEND_API_KEY) return json({ error: 'Email is not set up yet. Please contact Mars.' }, 503);
+        const b = await request.json().catch(() => ({}));
+        const subject = clean(b.subject, 120), message = typeof b.message === 'string' ? b.message.trim().slice(0, 4000) : '';
+        if (!subject || !message) return json({ error: 'Add a subject and a message' }, 400);
+        const today = new Date().toISOString().slice(0, 10);
+        if (!b.test && (await env.SHOP.get('msg:last')) === today) return json({ error: 'You can send one message to members a day. Try again tomorrow.' }, 429);
+        const cfg = await loadConfig(env);
+        const members = (await allMembers(env)).filter(m => !m.optOut);
+        const list = b.test ? [{ email: cfg.store?.email, name: 'Test' }].filter(m => m.email) : members;
+        if (!list.length) return json({ error: b.test ? 'Add your email under Shop details to send yourself a test.' : 'No members to send to yet' }, 400);
+        let sent = 0;
+        for (let i = 0; i < list.length; i += 100) {
+          const batch = await Promise.all(list.slice(i, i + 100).map(async m => {
+            const unsub = await unsubscribeLink(env, m.email);
+            return mailBody(env, cfg, { to: m.email, subject: (b.test ? '[Test] ' : '') + subject, unsub,
+              html: `<p>Hi ${escHtml(m.name || 'there')},</p>${message.split(/\n{2,}/).map(p => `<p>${escHtml(p).replace(/\n/g, '<br>')}</p>`).join('')}<p><a href="${escHtml(env.SITE_URL || '')}" style="color:${escHtml(cfg.store?.brandColor || '#072448')};font-weight:700">Open ${escHtml(cfg.store?.name || 'the shop')}</a></p>` });
+          }));
+          await resend(env, '/emails/batch', batch);
+          sent += batch.length;
+        }
+        if (!b.test) await env.SHOP.put('msg:last', today, { expirationTtl: 60 * 60 * 30 });
+        return json({ ok: true, sent });
+      }
+      // Public: the unsubscribe link at the bottom of every member email.
+      if ((GET || POST) && path === '/unsubscribe') { // POST = the email app's one-click unsubscribe
+        const email = (url.searchParams.get('e') || '').toLowerCase(), tok = url.searchParams.get('t') || '';
+        const ok = email && await sameText(tok, await unsubscribeToken(env, email));
+        if (ok) { const m = await env.SHOP.get('member:' + email, 'json'); if (m) await env.SHOP.put('member:' + email, JSON.stringify({ ...m, optOut: Date.now() })) }
+        const cfg = await loadConfig(env).catch(() => ({}));
+        return new Response(`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Unsubscribed</title><body style="font-family:system-ui;max-width:480px;margin:60px auto;padding:0 20px;text-align:center"><h1 style="font-size:22px">${ok ? "You're unsubscribed" : 'That link has expired'}</h1><p>${ok ? `You won't get member emails from ${escHtml(cfg.store?.name || 'this shop')} anymore. You're still a member, and your member prices still work.` : 'Please use the newest link from one of our emails.'}</p>`, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
       }
 
       if (GET && path === '/admin/members') {
@@ -586,6 +630,60 @@ async function salesStats(env, url) {
   };
 }
 
+// ---------- Email (Resend). Everything here quietly does nothing until RESEND_API_KEY is set. ----------
+const MAIL_DOMAIN_FROM = 'shops@celyumdigitalsolutions.com';
+const escHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+async function resend(env, path, body) {
+  const res = await fetch('https://api.resend.com' + path, { method: 'POST', headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message || data?.error || `email error ${res.status}`);
+  return data;
+}
+// One email from the shop: the shop's name as the sender, replies go to the shop's own email.
+function mailBody(env, cfg, { to, subject, html, unsub }) {
+  const S = cfg.store || {}, name = String(S.name || 'Shop').replace(/["<>]/g, '');
+  const foot = `<hr style="border:0;border-top:1px solid #e1e5ec;margin:24px 0 12px"><p style="font-size:12px;color:#5f6b7a">${escHtml(S.name || '')}${S.address ? ' · ' + escHtml(S.address) : ''}${unsub ? `<br>You're getting this because you joined as a member. <a href="${escHtml(unsub)}" style="color:#5f6b7a">Unsubscribe</a>` : ''}</p>`;
+  const msg = { from: `${name} <${env.MAIL_FROM || MAIL_DOMAIN_FROM}>`, to: [to], subject, html: `<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;line-height:1.5;color:#0e1a2b;max-width:560px">${html}${foot}</div>` };
+  if (S.email) msg.reply_to = S.email;
+  if (unsub) msg.headers = { 'List-Unsubscribe': `<${unsub}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' };
+  return msg;
+}
+async function sendMail(env, cfg, opts) { return resend(env, '/emails', mailBody(env, cfg, opts)) }
+async function unsubscribeToken(env, email) {
+  let secret = await env.SHOP.get('unsub-secret');
+  if (!secret) { secret = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(24)))); await env.SHOP.put('unsub-secret', secret) }
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(email.toLowerCase()));
+  return btoa(String.fromCharCode(...new Uint8Array(sig))).replace(/[+/=]/g, c => ({ '+': '-', '/': '_', '=': '' }[c])).slice(0, 32);
+}
+async function unsubscribeLink(env, email) {
+  const base = (env.API_BASE || '').replace(/\/+$/, '');
+  return `${base}/unsubscribe?e=${encodeURIComponent(email)}&t=${await unsubscribeToken(env, email)}`;
+}
+async function allMembers(env) {
+  const out = []; let cursor;
+  do {
+    const page = await env.SHOP.list({ prefix: 'member:', cursor });
+    out.push(...(await Promise.all(page.keys.map(k => env.SHOP.get(k.name, 'json')))).filter(Boolean));
+    cursor = page.list_complete ? null : page.cursor;
+  } while (cursor);
+  return out;
+}
+// "Your order is ready for pickup" / "Your order has shipped".
+async function emailOrderStatus(env, id, status) {
+  const plan = await getPlan(env), account = plan?.activatedAt ? plan.account : '';
+  const sess = await stripe(env, '/checkout/sessions/' + id + '?expand[]=line_items', { account });
+  const to = sess.customer_details?.email; if (!to) return false;
+  const cfg = await loadConfig(env), S = cfg.store || {}, pickup = sess.metadata?.fulfilment !== 'ship';
+  if (status === 'done' && pickup) return false; // picked up: nothing to tell them
+  const items = (sess.line_items?.data || []).map(li => `<li>${li.quantity} × ${escHtml(li.description)}</li>`).join('');
+  const first = escHtml((sess.customer_details?.name || '').split(' ')[0] || 'there');
+  const subject = status === 'ready' ? `Your order from ${S.name} is ready for pickup` : `Your order from ${S.name} has shipped`;
+  const where = pickup ? `<p><b>Pick it up at:</b> ${escHtml(S.address || S.name)}${S.hours ? `<br><b>Hours:</b> ${escHtml(S.hours)}` : ''}</p>` : '<p>It\'s on its way to the address you gave at checkout.</p>';
+  await sendMail(env, cfg, { to, subject, html: `<p>Hi ${first},</p><p>${status === 'ready' ? 'Good news: your order is ready for pickup.' : 'Good news: your order is on its way.'}</p><ul>${items}</ul>${where}<p>Order #${escHtml(id.slice(-5).toUpperCase())}${S.phone ? ` · Questions? Call ${escHtml(S.phone)}` : ''}</p>` });
+  return true;
+}
+
 // ---------- Pro: order list ----------
 const ORDER_STATUS_KEY = 'order-status';
 // A shop on the free plan gets a "this is a Pro feature" answer. Shops Mars never activated
@@ -594,7 +692,7 @@ async function proGate(env) {
   let plan = await getPlan(env);
   if (!plan?.activatedAt) return null;
   plan = await refreshPro(env, plan);
-  return planState(plan).pro ? null : json({ error: 'The order list is a Pro feature', pro: false }, 402);
+  return planState(plan).pro ? null : json({ error: 'This is a Pro feature. Upgrade to Pro to use it.', pro: false }, 402);
 }
 // Paid orders from the last 30 days, newest first, with each one's status.
 async function listOrders(env) {

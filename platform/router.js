@@ -44,7 +44,7 @@ function prefixKV(kv, P) {
 function originOf(url, env) { return (env.PUBLIC_ORIGIN || url.origin).replace(/\/+$/, '') }
 function tenantEnv(env, slug, origin, rec) {
   // ADMIN_PASSWORD here is only a one-time setup code Mars made (after a reset); normally empty.
-  return { ...env, SHOP: prefixKV(env.SHOP, `s:${slug}:`), SITE_URL: `${origin}/${slug}/`, ADMIN_PASSWORD: rec?.setupCode || '', TENANT: slug };
+  return { ...env, SHOP: prefixKV(env.SHOP, `s:${slug}:`), SITE_URL: `${origin}/${slug}/`, API_BASE: `${origin}/api/${slug}`, ADMIN_PASSWORD: rec?.setupCode || '', TENANT: slug };
 }
 
 export default {
@@ -57,7 +57,7 @@ export default {
       const origin = originOf(url, env);
 
       // ----- global API -----
-      if (path === '/api/signup') return request.method === 'POST' ? signup(request, env, origin) : json({ error: 'Not found' }, 404);
+      if (path === '/api/signup') return request.method === 'POST' ? signup(request, env, origin, ctx) : json({ error: 'Not found' }, 404);
       if (path.startsWith('/api/mars/')) return marsApi(request, env, path.slice('/api/mars'.length));
 
       // ----- one shop's API -----
@@ -99,7 +99,7 @@ export default {
 };
 
 // ---------- signup ----------
-async function signup(request, env, origin) {
+async function signup(request, env, origin, ctx) {
   const b = await request.json().catch(() => ({}));
   const t = (v, n) => (typeof v === 'string' ? v.trim().slice(0, n) : '');
   const name = t(b.shop, 60), owner = t(b.owner, 60), email = t(b.email, 120).toLowerCase(), password = typeof b.password === 'string' ? b.password : '';
@@ -135,6 +135,17 @@ async function signup(request, env, origin) {
   const rec = { name, email, owner, created: now };
   await env.SHOP.put('shopidx:' + slug, JSON.stringify(rec), { metadata: { name, email, created: now } });
   shopIndexCache.set(slug, { rec, at: now });
+  // Emails (once Resend is set up): a welcome to the owner, and a heads-up to Mars.
+  if (env.RESEND_API_KEY) {
+    const shopUrl = `${origin}/${slug}/`, ownerUrl = `${origin}/${slug}/owner/`, from = `Celyum Shops <${env.MAIL_FROM || MAIL_DOMAIN_FROM}>`;
+    const mails = [
+      { from, to: [email], reply_to: env.MARS_EMAIL || 'marcelo@celyumdigitalsolutions.com', subject: `${name} is ready`,
+        html: `<div style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.5;color:#0e1a2b;max-width:560px"><p>Hi ${escHtml(owner || 'there')},</p><p>Your shop app is live. Here's what to do next:</p><ol><li>Open your <a href="${ownerUrl}">owner app</a> and add your products.</li><li>Tap <b>Set up payments</b> so customers can pay by card.</li><li>Print your counter sign from <b>Your QR codes</b>.</li></ol><p>Your shop: <a href="${shopUrl}">${shopUrl}</a><br>Your owner app: <a href="${ownerUrl}">${ownerUrl}</a> (keep this one private)</p><p>Questions? Just reply to this email.</p><p>Mars · Celyum Digital</p></div>` },
+      { from, to: [env.MARS_EMAIL || 'marcelo@celyumdigitalsolutions.com'], subject: `New shop: ${name}`,
+        html: `<p><b>${escHtml(name)}</b> just signed up.</p><p>Owner: ${escHtml(owner || '–')} · ${escHtml(email)}<br>Shop: <a href="${shopUrl}">${shopUrl}</a></p><p><a href="${origin}/mars">Open your dashboard</a></p>` },
+    ];
+    ctx?.waitUntil(resend(env, '/emails/batch', mails).catch(() => {}));
+  }
   return json({ ok: true, slug, shopUrl: `${origin}/${slug}/`, ownerUrl: `${origin}/${slug}/owner/` });
 }
 
@@ -241,4 +252,3 @@ async function shopPage(env, slug, rest, origin, rec) {
   if (/^(icon-192|icon-512|icon-maskable-512|apple-touch-icon|owner-icon-192|owner-icon-512|owner-icon-maskable-512|owner-apple-touch-icon)\.png$/.test(file)) return asset(file);
   return notFoundPage();
 }
-const escHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
